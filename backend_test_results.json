@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-12-29T21:34:26.702335",
+  "total_tests": 18,
+  "passed_tests": 18,
+  "success_rate": 100.0,
+  "results": [
+    {
+      "test": "User Registration",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "User Login",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Family Member",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Family Members",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Family Member",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Family Member",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Bank",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Banks",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Bank",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Bank",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Category",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Categories",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Category",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Category",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Dashboard Summary",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Category Chart Data",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Monthly Comparison Data",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Transactions",
+      "success": true,
+      "details": "Status: 200"
+    }
+  ]
+}
