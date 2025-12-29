@@ -1,72 +1,571 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, timedelta
+import bcrypt
+from jose import JWTError, jwt
+import io
+import csv
+from ofxparse import OfxParser
+from decimal import Decimal
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+security = HTTPBearer()
 
+SECRET_KEY = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production-please-make-it-secure')
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    email: EmailStr
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: User
+
+class FamilyMember(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    profile: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class FamilyMemberCreate(BaseModel):
+    name: str
+    profile: Optional[str] = None
+
+class Bank(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BankCreate(BaseModel):
+    name: str
+    active: bool = True
+
+class Category(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    type: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CategoryCreate(BaseModel):
+    name: str
+    type: str
+
+class Transaction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    date: datetime
+    description: str
+    amount: float
+    type: str
+    category_id: Optional[str] = None
+    member_id: str
+    bank_id: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TransactionCreate(BaseModel):
+    date: datetime
+    description: str
+    amount: float
+    type: str
+    category_id: Optional[str] = None
+    member_id: str
+    bank_id: str
+
+class DashboardSummary(BaseModel):
+    previous_balance: float
+    month_income: float
+    month_expenses: float
+    final_balance: float
+
+class CategoryChart(BaseModel):
+    category: str
+    amount: float
+    percentage: float
+
+class MonthlyComparison(BaseModel):
+    month: str
+    income: float
+    expenses: float
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+@api_router.post("/auth/register", response_model=Token)
+async def register(user_data: UserCreate):
+    existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
+    hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
+    user = User(email=user_data.email, name=user_data.name)
+    user_dict = user.model_dump()
+    user_dict['timestamp'] = user_dict['created_at'].isoformat()
+    del user_dict['created_at']
+    user_dict['password'] = hashed_password.decode('utf-8')
     
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+    await db.users.insert_one(user_dict)
+    
+    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    access_token = jwt.encode(
+        {"sub": user.id, "exp": datetime.now(timezone.utc) + access_token_expires},
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+    
+    return Token(access_token=access_token, token_type="bearer", user=user)
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+@api_router.post("/auth/login", response_model=Token)
+async def login(user_data: UserLogin):
+    user_doc = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
+    if not bcrypt.checkpw(user_data.password.encode('utf-8'), user_doc['password'].encode('utf-8')):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    return status_checks
+    user = User(
+        id=user_doc['id'],
+        email=user_doc['email'],
+        name=user_doc['name'],
+        created_at=datetime.fromisoformat(user_doc['timestamp']) if isinstance(user_doc.get('timestamp'), str) else user_doc.get('created_at')
+    )
+    
+    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    access_token = jwt.encode(
+        {"sub": user.id, "exp": datetime.now(timezone.utc) + access_token_expires},
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+    
+    return Token(access_token=access_token, token_type="bearer", user=user)
 
-# Include the router in the main app
+@api_router.post("/family", response_model=FamilyMember)
+async def create_family_member(member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
+    member_obj = FamilyMember(**member.model_dump())
+    doc = member_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.family_members.insert_one(doc)
+    return member_obj
+
+@api_router.get("/family", response_model=List[FamilyMember])
+async def get_family_members(user_id: str = Depends(verify_token)):
+    members = await db.family_members.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for member in members:
+        if isinstance(member['created_at'], str):
+            member['created_at'] = datetime.fromisoformat(member['created_at'])
+    return members
+
+@api_router.put("/family/{member_id}", response_model=FamilyMember)
+async def update_family_member(member_id: str, member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
+    result = await db.family_members.update_one(
+        {"id": member_id, "user_id": user_id},
+        {"$set": member.model_dump()}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    
+    updated = await db.family_members.find_one({"id": member_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return FamilyMember(**updated)
+
+@api_router.delete("/family/{member_id}")
+async def delete_family_member(member_id: str, user_id: str = Depends(verify_token)):
+    result = await db.family_members.delete_one({"id": member_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"message": "Member deleted successfully"}
+
+@api_router.post("/banks", response_model=Bank)
+async def create_bank(bank: BankCreate, user_id: str = Depends(verify_token)):
+    bank_obj = Bank(**bank.model_dump())
+    doc = bank_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.banks.insert_one(doc)
+    return bank_obj
+
+@api_router.get("/banks", response_model=List[Bank])
+async def get_banks(user_id: str = Depends(verify_token)):
+    banks = await db.banks.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for bank in banks:
+        if isinstance(bank['created_at'], str):
+            bank['created_at'] = datetime.fromisoformat(bank['created_at'])
+    return banks
+
+@api_router.put("/banks/{bank_id}", response_model=Bank)
+async def update_bank(bank_id: str, bank: BankCreate, user_id: str = Depends(verify_token)):
+    result = await db.banks.update_one(
+        {"id": bank_id, "user_id": user_id},
+        {"$set": bank.model_dump()}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    
+    updated = await db.banks.find_one({"id": bank_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return Bank(**updated)
+
+@api_router.delete("/banks/{bank_id}")
+async def delete_bank(bank_id: str, user_id: str = Depends(verify_token)):
+    result = await db.banks.delete_one({"id": bank_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    return {"message": "Bank deleted successfully"}
+
+@api_router.post("/categories", response_model=Category)
+async def create_category(category: CategoryCreate, user_id: str = Depends(verify_token)):
+    category_obj = Category(**category.model_dump())
+    doc = category_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.categories.insert_one(doc)
+    return category_obj
+
+@api_router.get("/categories", response_model=List[Category])
+async def get_categories(user_id: str = Depends(verify_token)):
+    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for category in categories:
+        if isinstance(category['created_at'], str):
+            category['created_at'] = datetime.fromisoformat(category['created_at'])
+    return categories
+
+@api_router.put("/categories/{category_id}", response_model=Category)
+async def update_category(category_id: str, category: CategoryCreate, user_id: str = Depends(verify_token)):
+    result = await db.categories.update_one(
+        {"id": category_id, "user_id": user_id},
+        {"$set": category.model_dump()}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    updated = await db.categories.find_one({"id": category_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return Category(**updated)
+
+@api_router.delete("/categories/{category_id}")
+async def delete_category(category_id: str, user_id: str = Depends(verify_token)):
+    result = await db.categories.delete_one({"id": category_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"message": "Category deleted successfully"}
+
+@api_router.post("/transactions/import")
+async def import_transactions(
+    file: UploadFile = File(...),
+    member_id: str = Form(...),
+    bank_id: str = Form(...),
+    user_id: str = Depends(verify_token)
+):
+    content = await file.read()
+    file_extension = file.filename.lower().split('.')[-1] if file.filename else ''
+    
+    transactions = []
+    
+    try:
+        if file_extension == 'csv':
+            csv_content = content.decode('utf-8')
+            csv_reader = csv.DictReader(io.StringIO(csv_content))
+            
+            for row in csv_reader:
+                try:
+                    date_str = row.get('date') or row.get('Date') or row.get('DATA')
+                    description = row.get('description') or row.get('Description') or row.get('DESCRICAO') or 'N/A'
+                    amount_str = row.get('amount') or row.get('Amount') or row.get('VALOR') or '0'
+                    
+                    amount_str = amount_str.replace(',', '.').replace('R$', '').replace('$', '').strip()
+                    amount = float(amount_str)
+                    
+                    trans_type = 'receita' if amount > 0 else 'despesa'
+                    
+                    trans_date = datetime.now(timezone.utc)
+                    if date_str:
+                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+                            try:
+                                trans_date = datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
+                                break
+                            except:
+                                continue
+                    
+                    transaction = Transaction(
+                        date=trans_date,
+                        description=description,
+                        amount=abs(amount),
+                        type=trans_type,
+                        member_id=member_id,
+                        bank_id=bank_id
+                    )
+                    transactions.append(transaction)
+                except Exception as e:
+                    logging.error(f"Error parsing CSV row: {e}")
+                    continue
+        
+        elif file_extension == 'ofx':
+            ofx = OfxParser.parse(io.BytesIO(content))
+            
+            for account in ofx.accounts:
+                for trans in account.statement.transactions:
+                    amount = float(trans.amount)
+                    trans_type = 'receita' if amount > 0 else 'despesa'
+                    
+                    transaction = Transaction(
+                        date=trans.date.replace(tzinfo=timezone.utc) if trans.date else datetime.now(timezone.utc),
+                        description=trans.memo or trans.payee or 'N/A',
+                        amount=abs(amount),
+                        type=trans_type,
+                        member_id=member_id,
+                        bank_id=bank_id
+                    )
+                    transactions.append(transaction)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format. Use CSV or OFX")
+        
+        if transactions:
+            docs = []
+            for trans in transactions:
+                doc = trans.model_dump()
+                doc['date'] = doc['date'].isoformat()
+                doc['created_at'] = doc['created_at'].isoformat()
+                doc['user_id'] = user_id
+                docs.append(doc)
+            
+            await db.transactions.insert_many(docs)
+        
+        return {"message": f"Successfully imported {len(transactions)} transactions", "count": len(transactions)}
+    
+    except Exception as e:
+        logging.error(f"Error importing file: {e}")
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+@api_router.get("/transactions", response_model=List[Transaction])
+async def get_transactions(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    user_id: str = Depends(verify_token)
+):
+    query = {"user_id": user_id}
+    
+    transactions = await db.transactions.find(query, {"_id": 0}).to_list(10000)
+    
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+        if isinstance(trans['created_at'], str):
+            trans['created_at'] = datetime.fromisoformat(trans['created_at'])
+    
+    if month and year:
+        transactions = [
+            t for t in transactions
+            if t['date'].month == month and t['date'].year == year
+        ]
+    
+    return sorted(transactions, key=lambda x: x['date'], reverse=True)
+
+@api_router.get("/transactions/{transaction_id}", response_model=Transaction)
+async def get_transaction(transaction_id: str, user_id: str = Depends(verify_token)):
+    trans = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
+    if not trans:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if isinstance(trans['date'], str):
+        trans['date'] = datetime.fromisoformat(trans['date'])
+    if isinstance(trans['created_at'], str):
+        trans['created_at'] = datetime.fromisoformat(trans['created_at'])
+    
+    return Transaction(**trans)
+
+@api_router.put("/transactions/{transaction_id}", response_model=Transaction)
+async def update_transaction(transaction_id: str, transaction: TransactionCreate, user_id: str = Depends(verify_token)):
+    update_data = transaction.model_dump()
+    update_data['date'] = update_data['date'].isoformat()
+    
+    result = await db.transactions.update_one(
+        {"id": transaction_id, "user_id": user_id},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    updated = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+    if isinstance(updated['date'], str):
+        updated['date'] = datetime.fromisoformat(updated['date'])
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
+    return Transaction(**updated)
+
+@api_router.delete("/transactions/{transaction_id}")
+async def delete_transaction(transaction_id: str, user_id: str = Depends(verify_token)):
+    result = await db.transactions.delete_one({"id": transaction_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"message": "Transaction deleted successfully"}
+
+@api_router.get("/dashboard/summary", response_model=DashboardSummary)
+async def get_dashboard_summary(
+    month: int,
+    year: int,
+    user_id: str = Depends(verify_token)
+):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    
+    current_month_trans = [
+        t for t in transactions
+        if t['date'].month == month and t['date'].year == year
+    ]
+    
+    previous_month = month - 1 if month > 1 else 12
+    previous_year = year if month > 1 else year - 1
+    
+    previous_trans = [
+        t for t in transactions
+        if (t['date'].year < previous_year) or 
+           (t['date'].year == previous_year and t['date'].month < previous_month) or
+           (t['date'].year == previous_year and t['date'].month == previous_month)
+    ]
+    
+    previous_balance = 0
+    for t in previous_trans:
+        if t['type'] == 'receita':
+            previous_balance += t['amount']
+        else:
+            previous_balance -= t['amount']
+    
+    month_income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
+    month_expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
+    
+    final_balance = previous_balance + month_income - month_expenses
+    
+    return DashboardSummary(
+        previous_balance=previous_balance,
+        month_income=month_income,
+        month_expenses=month_expenses,
+        final_balance=final_balance
+    )
+
+@api_router.get("/dashboard/category-chart", response_model=List[CategoryChart])
+async def get_category_chart(
+    month: int,
+    year: int,
+    user_id: str = Depends(verify_token)
+):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    
+    category_map = {c['id']: c['name'] for c in categories}
+    
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    
+    current_month_trans = [
+        t for t in transactions
+        if t['date'].month == month and t['date'].year == year and t['type'] == 'despesa'
+    ]
+    
+    category_totals = {}
+    for trans in current_month_trans:
+        cat_id = trans.get('category_id')
+        cat_name = category_map.get(cat_id, 'Sem Categoria') if cat_id else 'Sem Categoria'
+        
+        if cat_name not in category_totals:
+            category_totals[cat_name] = 0
+        category_totals[cat_name] += trans['amount']
+    
+    total = sum(category_totals.values())
+    
+    result = []
+    for cat_name, amount in category_totals.items():
+        percentage = (amount / total * 100) if total > 0 else 0
+        result.append(CategoryChart(
+            category=cat_name,
+            amount=amount,
+            percentage=round(percentage, 2)
+        ))
+    
+    return sorted(result, key=lambda x: x.amount, reverse=True)
+
+@api_router.get("/dashboard/monthly-comparison", response_model=List[MonthlyComparison])
+async def get_monthly_comparison(
+    year: int,
+    user_id: str = Depends(verify_token)
+):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    
+    year_trans = [t for t in transactions if t['date'].year == year]
+    
+    monthly_data = {}
+    month_names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    
+    for month_num in range(1, 13):
+        month_trans = [t for t in year_trans if t['date'].month == month_num]
+        income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
+        expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
+        
+        monthly_data[month_num] = MonthlyComparison(
+            month=month_names[month_num - 1],
+            income=income,
+            expenses=expenses
+        )
+    
+    return [monthly_data[m] for m in range(1, 13)]
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -77,7 +576,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
