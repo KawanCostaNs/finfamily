@@ -1,0 +1,152 @@
+{
+  "identity": {
+    "persona": "E1",
+    "mission": "Create a top 1% family finance dashboard that blends 'Control Room' precision with 'Family' warmth.",
+    "principles": [
+      "Fusion: Fintech Precision + Family Warmth",
+      "Emotion First: Confidence & Clarity",
+      "Content is King: Data tells the story",
+      "Zoom In: Focus on the numbers that matter",
+      "Negative Space: Don't clutter the dashboard"
+    ]
+  },
+  "design_system": {
+    "typography": {
+      "headings": {
+        "family": "Manrope, sans-serif",
+        "weights": ["600", "700", "800"],
+        "usage": "Page titles, Card headers, Major metrics"
+      },
+      "body": {
+        "family": "Inter, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "General text, labels, descriptions"
+      },
+      "mono": {
+        "family": "JetBrains Mono, monospace",
+        "weights": ["400", "500"],
+        "usage": "Financial data, currency values, account numbers"
+      }
+    },
+    "colors": {
+      "palette_name": "Midnight Electric",
+      "mode": "dark",
+      "base": {
+        "background": "#020617",
+        "surface": "#0f172a",
+        "surface_highlight": "#1e293b",
+        "border": "#1e293b"
+      },
+      "primary": {
+        "main": "#3b82f6",
+        "hover": "#2563eb",
+        "foreground": "#ffffff"
+      },
+      "accent": {
+        "cyan": "#06b6d4",
+        "purple": "#8b5cf6",
+        "success": "#10b981",
+        "danger": "#f43f5e",
+        "warning": "#f59e0b"
+      },
+      "text": {
+        "primary": "#f8fafc",
+        "secondary": "#94a3b8",
+        "muted": "#64748b"
+      }
+    },
+    "surfaces": {
+      "glass_card": "bg-slate-900/60 backdrop-blur-xl border border-white/10 shadow-xl",
+      "solid_card": "bg-slate-900 border border-slate-800 shadow-sm",
+      "active_state": "bg-blue-500/10 border-blue-500/50 text-blue-400"
+    },
+    "layout": {
+      "dashboard_grid": "grid grid-cols-1 md:grid-cols-4 gap-6",
+      "spacing_scale": "p-4, p-6, p-8, p-12",
+      "radius": "rounded-xl"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all duration-300",
+      "secondary": "bg-slate-800 hover:bg-slate-700 text-white border border-slate-700",
+      "ghost": "hover:bg-slate-800/50 text-slate-400 hover:text-white"
+    },
+    "cards": {
+      "summary": "glass_card p-6 flex flex-col justify-between hover:border-blue-500/30 transition-colors",
+      "chart": "solid_card p-6"
+    },
+    "inputs": {
+      "style": "bg-slate-950 border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+    }
+  },
+  "assets": {
+    "images": {
+      "login_background": {
+        "url": "https://images.unsplash.com/photo-1762279389083-abf71f22d338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGJsdWUlMjBuZW9uJTIwZmluYW5jaWFsJTIwZGF0YSUyMHZpc3VhbGl6YXRpb24lMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc2NzA0MzU1OHww&ixlib=rb-4.1.0&q=85",
+        "alt": "Abstract Blue Financial Data",
+        "usage": "Full screen background for login page with overlay"
+      },
+      "family_placeholder": {
+        "url": "https://images.pexels.com/photos/7173310/pexels-photo-7173310.jpeg",
+        "alt": "Family Portrait",
+        "usage": "Placeholder for family settings or welcome screen"
+      }
+    },
+    "icons": {
+      "library": "lucide-react",
+      "style": "Stroke width 1.5px for elegance, 2px for active states"
+    }
+  },
+  "pages": {
+    "login": {
+      "layout": "Split screen or Centered Card on Abstract Background",
+      "elements": ["Email Input", "Password Input", "Login Button", "Forgot Password Link"]
+    },
+    "dashboard": {
+      "layout": "Bento Grid (Mode B)",
+      "sections": [
+        {
+          "name": "Summary Cards",
+          "type": "grid-row",
+          "elements": ["Balance", "Income", "Expenses", "Savings"]
+        },
+        {
+          "name": "Main Charts",
+          "type": "grid-row-large",
+          "elements": ["Income vs Expense Bar Chart", "Category Pie Chart"]
+        },
+        {
+          "name": "Recent Transactions",
+          "type": "sidebar-list",
+          "elements": ["List of last 5 transactions"]
+        }
+      ]
+    },
+    "import": {
+      "layout": "Centered Upload Zone",
+      "elements": ["Drag & Drop Area", "Member Select", "Bank Select", "Process Button"]
+    }
+  },
+  "instructions_to_main_agent": {
+    "general": [
+      "Implement the 'Midnight Electric' color palette strictly.",
+      "Use 'Manrope' for all headings and 'JetBrains Mono' for all currency values.",
+      "Ensure all cards have a subtle glass effect (backdrop-blur) to feel modern.",
+      "Use Recharts for all data visualization.",
+      "Add 'data-testid' to all interactive elements."
+    ],
+    "specific": [
+      "For the Dashboard, use a CSS Grid layout that adapts from 1 column (mobile) to 4 columns (desktop).",
+      "The 'Summary Cards' should look like physical cards with a slight glow on hover.",
+      "The Import page should feel like a 'wizard' or a focused task - minimal distractions."
+    ]
+  },
+  "universal_guidelines": [
+    "Do not use gradients for text, only for backgrounds or borders.",
+    "Avoid 'Inter' for headings.",
+    "Use 2-3x more padding than standard Tailwind defaults (e.g., p-6 instead of p-4).",
+    "Ensure high contrast for text (WCAG AA compliance).",
+    "Add micro-interactions to all buttons and inputs (transform, color change)."
+  ]
+}
