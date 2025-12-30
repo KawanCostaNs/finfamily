@@ -204,10 +204,16 @@ async def login(user_data: UserLogin):
     if not bcrypt.checkpw(user_data.password.encode('utf-8'), user_doc['password'].encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
+    # Verifica se a conta foi aprovada
+    if not user_doc.get('is_approved', False):
+        raise HTTPException(status_code=403, detail="Conta ainda não aprovada pelo administrador")
+    
     user = User(
         id=user_doc['id'],
         email=user_doc['email'],
         name=user_doc['name'],
+        is_admin=user_doc.get('is_admin', False),
+        is_approved=user_doc.get('is_approved', False),
         created_at=datetime.fromisoformat(user_doc['timestamp']) if isinstance(user_doc.get('timestamp'), str) else user_doc.get('created_at')
     )
     
