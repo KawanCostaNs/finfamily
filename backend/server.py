@@ -143,7 +143,17 @@ async def register(user_data: UserCreate):
         raise HTTPException(status_code=400, detail="Email already registered")
     
     hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
-    user = User(email=user_data.email, name=user_data.name)
+    
+    # Verifica se é o primeiro usuário (será admin)
+    user_count = await db.users.count_documents({})
+    is_first_user = user_count == 0
+    
+    user = User(
+        email=user_data.email, 
+        name=user_data.name,
+        is_admin=is_first_user,
+        is_approved=is_first_user  # Primeiro usuário é aprovado automaticamente
+    )
     user_dict = user.model_dump()
     user_dict['timestamp'] = user_dict['created_at'].isoformat()
     del user_dict['created_at']
@@ -151,12 +161,37 @@ async def register(user_data: UserCreate):
     
     await db.users.insert_one(user_dict)
     
+    # Se não for o primeiro usuário, não gera token (precisa aprovação)
+    if not is_first_user:
+        return {"message": "Conta criada! Aguarde aprovação do administrador."}
+    
     access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     access_token = jwt.encode(
         {"sub": user.id, "exp": datetime.now(timezone.utc) + access_token_expires},
         SECRET_KEY,
         algorithm=ALGORITHM
     )
+    
+    # Criar categorias fixas para o primeiro usuário
+    fixed_categories = [
+        {"name": "Reserva de Emergência", "type": "especial"},
+        {"name": "Alimentação", "type": "despesa"},
+        {"name": "Transporte", "type": "despesa"},
+        {"name": "Saúde", "type": "despesa"},
+        {"name": "Lazer", "type": "despesa"},
+        {"name": "Educação", "type": "despesa"},
+        {"name": "Moradia", "type": "despesa"},
+        {"name": "Salário", "type": "receita"},
+        {"name": "Freelance", "type": "receita"},
+    ]
+    
+    for cat_data in fixed_categories:
+        cat = Category(name=cat_data["name"], type=cat_data["type"])
+        cat_dict = cat.model_dump()
+        cat_dict['created_at'] = cat_dict['created_at'].isoformat()
+        cat_dict['user_id'] = user.id
+        cat_dict['is_fixed'] = True
+        await db.categories.insert_one(cat_dict)
     
     return Token(access_token=access_token, token_type="bearer", user=user)
 
