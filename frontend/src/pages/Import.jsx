@@ -109,9 +109,17 @@ export default function Import() {
         </div>
       );
 
+      // Reset form
       setFile(null);
       setMemberId('');
       setBankId('');
+      
+      // Suggest navigating to dashboard or transactions
+      setTimeout(() => {
+        toast.info('Acesse o Dashboard ou Transações para ver os dados importados', {
+          duration: 5000,
+        });
+      }, 1000);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error(
