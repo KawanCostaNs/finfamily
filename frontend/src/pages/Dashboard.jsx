@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [categoryData, setCategoryData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [emergencyReserve, setEmergencyReserve] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('token');
