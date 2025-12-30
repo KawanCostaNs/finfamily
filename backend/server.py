@@ -226,6 +226,36 @@ async def login(user_data: UserLogin):
     
     return Token(access_token=access_token, token_type="bearer", user=user)
 
+# Admin endpoints
+async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user_id = await verify_token(credentials)
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_doc or not user_doc.get('is_admin', False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_id
+
+@api_router.get("/admin/users")
+async def get_all_users(user_id: str = Depends(verify_admin)):
+    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    return users
+
+@api_router.post("/admin/users/{user_email}/approve")
+async def approve_user(user_email: str, admin_id: str = Depends(verify_admin)):
+    result = await db.users.update_one(
+        {"email": user_email},
+        {"$set": {"is_approved": True}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User approved successfully"}
+
+@api_router.delete("/admin/users/{user_email}")
+async def delete_user(user_email: str, admin_id: str = Depends(verify_admin)):
+    result = await db.users.delete_one({"email": user_email})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted successfully"}
+
 @api_router.post("/family", response_model=FamilyMember)
 async def create_family_member(member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
     member_obj = FamilyMember(**member.model_dump())
