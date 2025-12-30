@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Import from './pages/Import';
+import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
 import Layout from './components/Layout';
 import { Toaster } from './components/ui/sonner';
