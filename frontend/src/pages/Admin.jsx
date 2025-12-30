@@ -272,16 +272,27 @@ export default function Admin() {
                       Ativo
                     </span>
                   </div>
-                  {!user.is_admin && (
+                  <div className="flex gap-2">
                     <Button
-                      onClick={() => handleDelete(user.email)}
+                      data-testid="reset-password-button"
+                      onClick={() => setResetPasswordDialog({ open: true, email: user.email })}
                       variant="ghost"
-                      className="text-red-400 hover:text-red-300 hover:bg-slate-800"
+                      className="text-amber-400 hover:text-amber-300 hover:bg-slate-800"
                     >
-                      <UserX className="w-4 h-4 mr-2" />
-                      Remover
+                      <Key className="w-4 h-4 mr-2" />
+                      Resetar Senha
                     </Button>
-                  )}
+                    {!user.is_admin && (
+                      <Button
+                        onClick={() => handleDelete(user.email)}
+                        variant="ghost"
+                        className="text-red-400 hover:text-red-300 hover:bg-slate-800"
+                      >
+                        <UserX className="w-4 h-4 mr-2" />
+                        Remover
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
