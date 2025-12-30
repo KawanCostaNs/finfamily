@@ -85,6 +85,27 @@ export default function Admin() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Senha deve ter no mínimo 6 caracteres');
+      return;
+    }
+
+    try {
+      await axios.post(
+        `${API}/admin/users/${resetPasswordDialog.email}/reset-password`,
+        { new_password: newPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Senha resetada com sucesso!');
+      setResetPasswordDialog({ open: false, email: null });
+      setNewPassword('');
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      toast.error('Erro ao resetar senha');
+    }
+  };
+
   if (!currentUser?.is_admin) {
     return (
       <div className="flex items-center justify-center h-full">
