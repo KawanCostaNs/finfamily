@@ -381,6 +381,7 @@ async def import_transactions(
     file_extension = file.filename.lower().split('.')[-1] if file.filename else ''
     
     transactions = []
+    duplicates_count = 0
     
     try:
         if file_extension == 'csv':
@@ -422,22 +423,15 @@ async def import_transactions(
                         continue
                     
                     # Limpa e converte valor brasileiro
-                    # Remove espaços, R$, $ e converte vírgula para ponto
                     amount_str = amount_str.replace('R$', '').replace('$', '').replace(' ', '')
                     
-                    # Para valores brasileiros: remove ponto de milhares, mantém vírgula como decimal
-                    # Ex: 1.234,56 -> 1234.56
                     if ',' in amount_str:
-                        # Se tem vírgula, ela é o separador decimal
                         parts = amount_str.rsplit(',', 1)
-                        integer_part = parts[0].replace('.', '')  # Remove pontos de milhares
+                        integer_part = parts[0].replace('.', '')
                         decimal_part = parts[1] if len(parts) > 1 else '00'
                         amount_str = f"{integer_part}.{decimal_part}"
                     
-                    # Converte para float
                     amount = float(amount_str)
-                    
-                    # Determina tipo: negativo = despesa, positivo = receita
                     trans_type = 'receita' if amount > 0 else 'despesa'
                     
                     trans_date = datetime.now(timezone.utc)
@@ -448,6 +442,20 @@ async def import_transactions(
                                 break
                             except:
                                 continue
+                    
+                    # Verifica duplicata: mesma data, descrição, valor, membro e banco
+                    existing = await db.transactions.find_one({
+                        "user_id": user_id,
+                        "date": trans_date.isoformat(),
+                        "description": description,
+                        "amount": abs(amount),
+                        "member_id": member_id,
+                        "bank_id": bank_id
+                    })
+                    
+                    if existing:
+                        duplicates_count += 1
+                        continue  # Pula transação duplicada
                     
                     transaction = Transaction(
                         date=trans_date,
