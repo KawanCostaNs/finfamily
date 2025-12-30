@@ -27,6 +27,7 @@ export default function Layout() {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/import', label: 'Importar', icon: Upload },
+    { path: '/transactions', label: 'Transações', icon: List },
     { path: '/settings', label: 'Configurações', icon: Settings },
   ];
 
