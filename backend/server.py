@@ -501,7 +501,16 @@ async def import_transactions(
             
             await db.transactions.insert_many(docs)
         
-        return {"message": f"Successfully imported {len(transactions)} transactions", "count": len(transactions)}
+        message = f"Successfully imported {len(transactions)} new transactions"
+        if duplicates_count > 0:
+            message += f" ({duplicates_count} duplicates skipped)"
+        
+        return {
+            "message": message,
+            "count": len(transactions),
+            "duplicates": duplicates_count,
+            "total_processed": len(transactions) + duplicates_count
+        }
     
     except Exception as e:
         logging.error(f"Error importing file: {e}")
