@@ -299,6 +299,62 @@ export default function Admin() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordDialog.open} onOpenChange={(open) => {
+        setResetPasswordDialog({ open, email: null });
+        setNewPassword('');
+      }}>
+        <DialogContent className="bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-amber-400" />
+              Resetar Senha
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Defina uma nova senha para {resetPasswordDialog.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Nova Senha</Label>
+              <Input
+                id="new-password"
+                data-testid="new-password-input"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="bg-slate-950 border-slate-800 text-white"
+              />
+              <p className="text-xs text-slate-500">
+                Recomendado: Use letras, números e caracteres especiais
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setResetPasswordDialog({ open: false, email: null });
+                setNewPassword('');
+              }}
+              className="text-slate-400"
+            >
+              Cancelar
+            </Button>
+            <Button
+              data-testid="confirm-reset-password"
+              onClick={handleResetPassword}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <Key className="w-4 h-4 mr-2" />
+              Resetar Senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
