@@ -45,6 +45,9 @@ export default function Transactions() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [editDialog, setEditDialog] = useState({ open: false, data: null });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkCategoryDialog, setBulkCategoryDialog] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState('');
 
   const token = localStorage.getItem('token');
 
