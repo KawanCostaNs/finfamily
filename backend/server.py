@@ -256,6 +256,24 @@ async def delete_user(user_email: str, admin_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted successfully"}
 
+class PasswordReset(BaseModel):
+    new_password: str
+
+@api_router.post("/admin/users/{user_email}/reset-password")
+async def reset_user_password(user_email: str, data: PasswordReset, admin_id: str = Depends(verify_admin)):
+    """Admin pode resetar senha de qualquer usuário"""
+    hashed_password = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt())
+    
+    result = await db.users.update_one(
+        {"email": user_email},
+        {"$set": {"password": hashed_password.decode('utf-8')}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"Password reset successfully for {user_email}"}
+
 @api_router.post("/family", response_model=FamilyMember)
 async def create_family_member(member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
     member_obj = FamilyMember(**member.model_dump())
