@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Upload, List, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Upload, List, Settings, LogOut, Menu, X, Shield } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 
