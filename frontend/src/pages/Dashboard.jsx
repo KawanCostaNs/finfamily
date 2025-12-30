@@ -61,7 +61,7 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, categoryRes, monthlyRes, transactionsRes] = await Promise.all([
+      const [summaryRes, categoryRes, monthlyRes, transactionsRes, reserveRes] = await Promise.all([
         axios.get(`${API}/dashboard/summary`, {
           params: { month, year },
           headers: { Authorization: `Bearer ${token}` },
@@ -77,12 +77,16 @@ export default function Dashboard() {
         axios.get(`${API}/transactions`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        axios.get(`${API}/dashboard/emergency-reserve`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
       setSummary(summaryRes.data);
       setCategoryData(categoryRes.data);
       setMonthlyData(monthlyRes.data);
       setTransactions(transactionsRes.data);
+      setEmergencyReserve(reserveRes.data.total);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('Erro ao carregar dados do dashboard');
