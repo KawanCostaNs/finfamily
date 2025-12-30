@@ -376,6 +376,55 @@ export default function Transactions() {
         onClose={() => setEditDialog({ open: false, data: null })}
         onSave={handleEdit}
       />
+
+      {/* Bulk Categorize Dialog */}
+      <Dialog open={bulkCategoryDialog} onOpenChange={setBulkCategoryDialog}>
+        <DialogContent className="bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle>Categorizar {selectedIds.length} Transações</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Selecione uma categoria para aplicar às transações selecionadas
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Categoria</Label>
+              <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+                <SelectTrigger data-testid="bulk-category-select" className="bg-slate-950 border-slate-800 text-white">
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800">
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id} className="text-white">
+                      {cat.name} ({cat.type === 'especial' ? 'Especial' : cat.type})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setBulkCategoryDialog(false);
+                setBulkCategoryId('');
+              }}
+              className="text-slate-400"
+            >
+              Cancelar
+            </Button>
+            <Button
+              data-testid="confirm-bulk-categorize"
+              onClick={handleBulkCategorize}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Categorizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
