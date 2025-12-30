@@ -564,6 +564,52 @@ async def delete_transaction(transaction_id: str, user_id: str = Depends(verify_
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"message": "Transaction deleted successfully"}
 
+class BulkCategorizeRequest(BaseModel):
+    transaction_ids: List[str]
+    category_id: str
+
+@api_router.post("/transactions/bulk-categorize")
+async def bulk_categorize_transactions(
+    data: BulkCategorizeRequest,
+    user_id: str = Depends(verify_token)
+):
+    result = await db.transactions.update_many(
+        {"id": {"$in": data.transaction_ids}, "user_id": user_id},
+        {"$set": {"category_id": data.category_id}}
+    )
+    
+    return {
+        "message": f"Successfully categorized {result.modified_count} transactions",
+        "count": result.modified_count
+    }
+
+@api_router.get("/dashboard/emergency-reserve")
+async def get_emergency_reserve(user_id: str = Depends(verify_token)):
+    # Busca a categoria "Reserva de Emergência"
+    reserve_category = await db.categories.find_one(
+        {"user_id": user_id, "name": "Reserva de Emergência"},
+        {"_id": 0}
+    )
+    
+    if not reserve_category:
+        return {"total": 0}
+    
+    # Busca todas as transações dessa categoria
+    transactions = await db.transactions.find(
+        {"user_id": user_id, "category_id": reserve_category['id']},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    total = 0
+    for trans in transactions:
+        # Receitas somam, despesas subtraem
+        if trans['type'] == 'receita':
+            total += trans['amount']
+        else:
+            total -= trans['amount']
+    
+    return {"total": total}
+
 @api_router.get("/dashboard/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(
     month: int,
