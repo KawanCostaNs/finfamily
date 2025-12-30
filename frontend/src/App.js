@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Import from './pages/Import';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
+import Admin from './pages/Admin';
 import Layout from './components/Layout';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
