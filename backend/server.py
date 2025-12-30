@@ -316,13 +316,25 @@ async def import_transactions(
             
             for row in csv_reader:
                 try:
-                    date_str = row.get('date') or row.get('Date') or row.get('DATA')
-                    description = row.get('description') or row.get('Description') or row.get('DESCRICAO') or 'N/A'
-                    amount_str = row.get('amount') or row.get('Amount') or row.get('VALOR') or '0'
+                    # Suporta múltiplos formatos de coluna
+                    date_str = (row.get('Data Lançamento') or row.get('Data') or 
+                               row.get('date') or row.get('Date') or row.get('DATA'))
                     
-                    amount_str = amount_str.replace(',', '.').replace('R$', '').replace('$', '').strip()
+                    description = (row.get('Descrição') or row.get('Histórico') or 
+                                 row.get('description') or row.get('Description') or 
+                                 row.get('DESCRICAO') or 'N/A')
+                    
+                    amount_str = (row.get('Valor') or row.get('amount') or 
+                                row.get('Amount') or row.get('VALOR') or '0')
+                    
+                    # Limpa e converte valor brasileiro (vírgula para ponto)
+                    amount_str = amount_str.replace('R$', '').replace('$', '').strip()
+                    amount_str = amount_str.replace('.', '').replace(',', '.')  # Remove milhares e converte decimal
+                    
+                    # Converte para float
                     amount = float(amount_str)
                     
+                    # Determina tipo: negativo = despesa, positivo = receita
                     trans_type = 'receita' if amount > 0 else 'despesa'
                     
                     trans_date = datetime.now(timezone.utc)
