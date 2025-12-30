@@ -136,7 +136,7 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
-@api_router.post("/auth/register", response_model=Token)
+@api_router.post("/auth/register")
 async def register(user_data: UserCreate):
     existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing:
@@ -161,9 +161,9 @@ async def register(user_data: UserCreate):
     
     await db.users.insert_one(user_dict)
     
-    # Se não for o primeiro usuário, não gera token (precisa aprovação)
+    # Se não for o primeiro usuário, retorna mensagem sem token
     if not is_first_user:
-        return {"message": "Conta criada! Aguarde aprovação do administrador."}
+        raise HTTPException(status_code=202, detail="Conta criada! Aguarde aprovação do administrador.")
     
     access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     access_token = jwt.encode(
