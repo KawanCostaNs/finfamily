@@ -312,24 +312,54 @@ async def import_transactions(
     try:
         if file_extension == 'csv':
             csv_content = content.decode('utf-8')
-            csv_reader = csv.DictReader(io.StringIO(csv_content))
+            
+            # Remove linhas de cabeçalho antes da tabela de dados
+            lines = csv_content.split('\n')
+            data_start = 0
+            for i, line in enumerate(lines):
+                if 'Data' in line and ('Lançamento' in line or 'Lancamento' in line or 'Valor' in line):
+                    data_start = i
+                    break
+            
+            # Reconstrói o CSV apenas com dados relevantes
+            csv_data = '\n'.join(lines[data_start:])
+            
+            # Tenta detectar o delimitador (vírgula ou ponto e vírgula)
+            delimiter = ';' if ';' in csv_data.split('\n')[0] else ','
+            
+            csv_reader = csv.DictReader(io.StringIO(csv_data), delimiter=delimiter)
             
             for row in csv_reader:
                 try:
                     # Suporta múltiplos formatos de coluna
-                    date_str = (row.get('Data Lançamento') or row.get('Data') or 
-                               row.get('date') or row.get('Date') or row.get('DATA'))
+                    date_str = (row.get('Data Lançamento') or row.get('Data Lancamento') or 
+                               row.get('Data') or row.get('date') or row.get('Date') or 
+                               row.get('DATA') or '').strip()
                     
-                    description = (row.get('Descrição') or row.get('Histórico') or 
+                    description = (row.get('Descrição') or row.get('Descricao') or 
+                                 row.get('Histórico') or row.get('Historico') or
                                  row.get('description') or row.get('Description') or 
-                                 row.get('DESCRICAO') or 'N/A')
+                                 row.get('DESCRICAO') or 'N/A').strip()
                     
                     amount_str = (row.get('Valor') or row.get('amount') or 
-                                row.get('Amount') or row.get('VALOR') or '0')
+                                row.get('Amount') or row.get('VALOR') or '0').strip()
                     
-                    # Limpa e converte valor brasileiro (vírgula para ponto)
-                    amount_str = amount_str.replace('R$', '').replace('$', '').strip()
-                    amount_str = amount_str.replace('.', '').replace(',', '.')  # Remove milhares e converte decimal
+                    # Pula linhas vazias
+                    if not amount_str or amount_str == '0':
+                        continue
+                    
+                    # Limpa e converte valor brasileiro
+                    # Remove espaços, R$, $ e converte vírgula para ponto
+                    amount_str = amount_str.replace('R$', '').replace('$', '').replace(' ', '')
+                    
+                    # Para valores brasileiros: remove ponto de milhares, mantém vírgula como decimal
+                    # Ex: 1.234,56 -> 1234.56
+                    if ',' in amount_str:
+                        # Se tem vírgula, ela é o separador decimal
+                        parts = amount_str.rsplit(',', 1)
+                        integer_part = parts[0].replace('.', '')  # Remove pontos de milhares
+                        decimal_part = parts[1] if len(parts) > 1 else '00'
+                        amount_str = f"{integer_part}.{decimal_part}"
                     
                     # Converte para float
                     amount = float(amount_str)
