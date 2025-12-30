@@ -146,6 +146,49 @@ export default function Transactions() {
     }
   };
 
+  const handleSelectAll = () => {
+    if (selectedIds.length === filteredTransactions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredTransactions.map((t) => t.id));
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((sid) => sid !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleBulkCategorize = async () => {
+    if (!bulkCategoryId || selectedIds.length === 0) {
+      toast.error('Selecione uma categoria');
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        `${API}/transactions/bulk-categorize`,
+        {
+          transaction_ids: selectedIds,
+          category_id: bulkCategoryId,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast.success(`${response.data.count} transações categorizadas com sucesso!`);
+      setSelectedIds([]);
+      setBulkCategoryDialog(false);
+      setBulkCategoryId('');
+      fetchData();
+    } catch (error) {
+      console.error('Error bulk categorizing:', error);
+      toast.error('Erro ao categorizar transações');
+    }
+  };
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
