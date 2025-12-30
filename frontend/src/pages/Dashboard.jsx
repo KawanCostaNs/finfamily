@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
@@ -7,8 +8,12 @@ import {
   Wallet,
   TrendingUp,
   Calendar,
+  TrendingDown,
+  DollarSign,
+  PieChart as PieChartIcon,
+  Activity,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import {
   Select,
@@ -29,6 +34,10 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
 } from 'recharts';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -37,11 +46,13 @@ const API = `${BACKEND_URL}/api`;
 const COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e', '#ec4899', '#6366f1'];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [summary, setSummary] = useState(null);
   const [categoryData, setCategoryData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('token');
@@ -49,7 +60,7 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, categoryRes, monthlyRes] = await Promise.all([
+      const [summaryRes, categoryRes, monthlyRes, transactionsRes] = await Promise.all([
         axios.get(`${API}/dashboard/summary`, {
           params: { month, year },
           headers: { Authorization: `Bearer ${token}` },
@@ -62,11 +73,15 @@ export default function Dashboard() {
           params: { year },
           headers: { Authorization: `Bearer ${token}` },
         }),
+        axios.get(`${API}/transactions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
       setSummary(summaryRes.data);
       setCategoryData(categoryRes.data);
       setMonthlyData(monthlyRes.data);
+      setTransactions(transactionsRes.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('Erro ao carregar dados do dashboard');
@@ -103,6 +118,42 @@ export default function Dashboard() {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
+  // Calculate balance trend
+  const balanceTrend = monthlyData.map((m) => ({
+    month: m.month,
+    balance: m.income - m.expenses,
+  }));
+
+  // Calculate savings rate
+  const savingsRate = summary
+    ? summary.month_income > 0
+      ? ((summary.month_income - summary.month_expenses) / summary.month_income) * 100
+      : 0
+    : 0;
+
+  // Top expenses categories (top 5)
+  const topExpenses = categoryData.slice(0, 5);
+
+  // Recent transactions
+  const recentTransactions = transactions
+    .slice(0, 5)
+    .map((t) => ({
+      ...t,
+      date: new Date(t.date),
+    }))
+    .sort((a, b) => b.date - a.date);
+
+  // Calculate cumulative balance over months
+  const cumulativeBalance = monthlyData.reduce((acc, curr, index) => {
+    const prevBalance = index > 0 ? acc[index - 1].balance : 0;
+    const currentBalance = prevBalance + curr.income - curr.expenses;
+    acc.push({
+      month: curr.month,
+      balance: currentBalance,
+    });
+    return acc;
+  }, []);
+
   if (loading && !summary) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -125,7 +176,7 @@ export default function Dashboard() {
           >
             Dashboard
           </h1>
-          <p className="text-slate-400 text-lg">Visão geral das suas finanças</p>
+          <p className="text-slate-400 text-lg">Visão geral completa das suas finanças</p>
         </div>
 
         <div className="flex gap-3">
@@ -235,7 +286,58 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Charts */}
+      {/* Additional Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="glass-card border-slate-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+              <Activity className="w-4 h-4 text-purple-400" />
+              Taxa de Poupança
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-purple-400 font-mono">
+              {savingsRate.toFixed(1)}%
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {savingsRate > 20 ? 'Excelente!' : savingsRate > 10 ? 'Bom' : 'Pode melhorar'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card border-slate-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+              <DollarSign className="w-4 h-4 text-cyan-400" />
+              Total de Transações
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-cyan-400 font-mono">{transactions.length}</p>
+            <button
+              onClick={() => navigate('/transactions')}
+              className="text-xs text-blue-400 hover:text-blue-300 mt-1"
+            >
+              Ver todas →
+            </button>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card border-slate-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+              <PieChartIcon className="w-4 h-4 text-amber-400" />
+              Categorias Ativas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-amber-400 font-mono">{categoryData.length}</p>
+            <p className="text-xs text-slate-500 mt-1">Com gastos este mês</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Category Pie Chart */}
         <Card data-testid="category-chart" className="solid-card border-slate-800">
@@ -243,6 +345,7 @@ export default function Dashboard() {
             <CardTitle className="text-xl font-bold text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
               Despesas por Categoria
             </CardTitle>
+            <CardDescription className="text-slate-400">Distribuição do mês selecionado</CardDescription>
           </CardHeader>
           <CardContent>
             {categoryData.length > 0 ? (
@@ -271,10 +374,7 @@ export default function Dashboard() {
                       color: '#f8fafc',
                     }}
                   />
-                  <Legend
-                    wrapperStyle={{ color: '#94a3b8' }}
-                    iconType="circle"
-                  />
+                  <Legend wrapperStyle={{ color: '#94a3b8' }} iconType="circle" />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -291,6 +391,7 @@ export default function Dashboard() {
             <CardTitle className="text-xl font-bold text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
               Receita vs Despesa ({year})
             </CardTitle>
+            <CardDescription className="text-slate-400">Comparativo mensal</CardDescription>
           </CardHeader>
           <CardContent>
             {monthlyData.length > 0 ? (
@@ -317,6 +418,177 @@ export default function Dashboard() {
               <div className="flex items-center justify-center h-[300px] text-slate-500">
                 Nenhum dado mensal disponível
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Balance Trend Line Chart */}
+        <Card className="solid-card border-slate-800">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
+              Tendência de Saldo ({year})
+            </CardTitle>
+            <CardDescription className="text-slate-400">Resultado líquido mensal</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {balanceTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={balanceTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="month" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip
+                    formatter={(value) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      color: '#f8fafc',
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#06b6d4"
+                    strokeWidth={3}
+                    dot={{ fill: '#06b6d4', r: 6 }}
+                    activeDot={{ r: 8 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-slate-500">
+                Nenhum dado disponível
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Cumulative Balance Area Chart */}
+        <Card className="solid-card border-slate-800">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
+              Evolução do Saldo Acumulado
+            </CardTitle>
+            <CardDescription className="text-slate-400">Crescimento patrimonial ao longo do ano</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {cumulativeBalance.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={cumulativeBalance}>
+                  <defs>
+                    <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.1} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="month" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip
+                    formatter={(value) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      color: '#f8fafc',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorBalance)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-slate-500">
+                Nenhum dado disponível
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Categories & Recent Transactions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top 5 Expenses */}
+        <Card className="glass-card border-slate-800">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
+              Top 5 Despesas
+            </CardTitle>
+            <CardDescription className="text-slate-400">Maiores gastos por categoria</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {topExpenses.length > 0 ? (
+                topExpenses.map((cat, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded-full"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <span className="text-white font-medium">{cat.category}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-mono font-semibold">{formatCurrency(cat.amount)}</p>
+                      <p className="text-xs text-slate-400">{cat.percentage.toFixed(1)}%</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-slate-500 py-8">Nenhuma despesa categorizada</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Transactions */}
+        <Card className="glass-card border-slate-800">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
+              Transações Recentes
+            </CardTitle>
+            <CardDescription className="text-slate-400">Últimas movimentações</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recentTransactions.length > 0 ? (
+                recentTransactions.map((trans) => (
+                  <div key={trans.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900/50">
+                    <div>
+                      <p className="text-white font-medium">{trans.description}</p>
+                      <p className="text-xs text-slate-400">
+                        {trans.date.toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <p
+                      className={`font-mono font-semibold ${
+                        trans.type === 'receita' ? 'text-green-400' : 'text-red-400'
+                      }`}
+                    >
+                      {trans.type === 'receita' ? '+' : '-'}
+                      {formatCurrency(trans.amount)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-slate-500 py-8">Nenhuma transação encontrada</p>
+              )}
+            </div>
+            {recentTransactions.length > 0 && (
+              <Button
+                onClick={() => navigate('/transactions')}
+                variant="ghost"
+                className="w-full mt-4 text-blue-400 hover:text-blue-300"
+              >
+                Ver todas as transações →
+              </Button>
             )}
           </CardContent>
         </Card>
