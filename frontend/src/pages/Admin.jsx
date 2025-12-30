@@ -1,9 +1,19 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Users, CheckCircle, XCircle, Shield, UserCheck, UserX } from 'lucide-react';
+import { Users, CheckCircle, XCircle, Shield, UserCheck, UserX, Key } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
