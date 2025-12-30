@@ -22,6 +22,8 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [resetPasswordDialog, setResetPasswordDialog] = useState({ open: false, email: null });
+  const [newPassword, setNewPassword] = useState('');
 
   const token = localStorage.getItem('token');
 
