@@ -218,77 +218,107 @@ export default function Dashboard() {
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card data-testid="previous-balance-card" className="glass-card border-slate-800 card-hover">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-                <Wallet className="w-4 h-4 text-slate-400" />
-                Saldo Anterior
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p
-                className="text-3xl font-bold text-white font-mono"
-                style={{ fontFamily: 'JetBrains Mono, monospace' }}
-              >
-                {formatCurrency(summary.previous_balance)}
-              </p>
-            </CardContent>
-          </Card>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card data-testid="previous-balance-card" className="glass-card border-slate-800 card-hover">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+                  <Wallet className="w-4 h-4 text-slate-400" />
+                  Saldo Anterior
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p
+                  className="text-3xl font-bold text-white font-mono"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  {formatCurrency(summary.previous_balance)}
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card data-testid="income-card" className="glass-card border-slate-800 card-hover">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-                <ArrowUpCircle className="w-4 h-4 text-green-400" />
-                Receita do Mês
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p
-                className="text-3xl font-bold text-green-400 font-mono glow-green"
-                style={{ fontFamily: 'JetBrains Mono, monospace' }}
-              >
-                {formatCurrency(summary.month_income)}
-              </p>
-            </CardContent>
-          </Card>
+            <Card data-testid="income-card" className="glass-card border-slate-800 card-hover">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+                  <ArrowUpCircle className="w-4 h-4 text-green-400" />
+                  Receita do Mês
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p
+                  className="text-3xl font-bold text-green-400 font-mono glow-green"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  {formatCurrency(summary.month_income)}
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card data-testid="expenses-card" className="glass-card border-slate-800 card-hover">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-                <ArrowDownCircle className="w-4 h-4 text-red-400" />
-                Despesas do Mês
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p
-                className="text-3xl font-bold text-red-400 font-mono glow-red"
-                style={{ fontFamily: 'JetBrains Mono, monospace' }}
-              >
-                {formatCurrency(summary.month_expenses)}
-              </p>
-            </CardContent>
-          </Card>
+            <Card data-testid="expenses-card" className="glass-card border-slate-800 card-hover">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+                  <ArrowDownCircle className="w-4 h-4 text-red-400" />
+                  Despesas do Mês
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p
+                  className="text-3xl font-bold text-red-400 font-mono glow-red"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  {formatCurrency(summary.month_expenses)}
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card data-testid="final-balance-card" className="glass-card border-slate-800 card-hover">
+            <Card data-testid="final-balance-card" className="glass-card border-slate-800 card-hover">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+                  <TrendingUp className="w-4 h-4 text-blue-400" />
+                  Saldo Final
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p
+                  className={`text-3xl font-bold font-mono ${
+                    summary.final_balance >= 0 ? 'text-cyan-400 glow-cyan' : 'text-red-400 glow-red'
+                  }`}
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  {formatCurrency(summary.final_balance)}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Emergency Reserve Card - Destaque Especial */}
+          <Card data-testid="emergency-reserve-card" className="glass-card border-amber-500/50 card-hover bg-gradient-to-br from-amber-900/20 to-amber-950/10">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-                <TrendingUp className="w-4 h-4 text-blue-400" />
-                Saldo Final
+              <CardTitle className="flex items-center gap-2 text-amber-300 text-lg font-medium">
+                <Shield className="w-5 h-5 text-amber-400" />
+                💰 Reserva de Emergência
               </CardTitle>
+              <CardDescription className="text-amber-200/70">
+                Total acumulado na reserva
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <p
-                className={`text-3xl font-bold font-mono ${
-                  summary.final_balance >= 0 ? 'text-cyan-400 glow-cyan' : 'text-red-400 glow-red'
-                }`}
+                className="text-4xl font-bold text-amber-400 font-mono glow-amber"
                 style={{ fontFamily: 'JetBrains Mono, monospace' }}
               >
-                {formatCurrency(summary.final_balance)}
+                {formatCurrency(emergencyReserve)}
+              </p>
+              <p className="text-sm text-amber-200/70 mt-2">
+                {emergencyReserve >= (summary.month_expenses * 6) 
+                  ? '✓ Excelente! Mais de 6 meses de despesas guardadas' 
+                  : emergencyReserve >= (summary.month_expenses * 3)
+                  ? '⚠ Bom! Procure atingir 6 meses de despesas'
+                  : '⚡ Continue guardando para atingir 3-6 meses de despesas'}
               </p>
             </CardContent>
           </Card>
-        </div>
+        </>
       )}
 
       {/* Additional Stats Cards */}
