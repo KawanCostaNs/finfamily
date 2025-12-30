@@ -31,6 +31,11 @@ export default function Layout() {
     { path: '/settings', label: 'Configurações', icon: Settings },
   ];
 
+  // Adiciona item de Admin se o usuário for admin
+  if (user?.is_admin) {
+    navItems.push({ path: '/admin', label: 'Admin', icon: Shield });
+  }
+
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
