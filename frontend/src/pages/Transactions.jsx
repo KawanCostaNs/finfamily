@@ -291,9 +291,49 @@ export default function Transactions() {
       {/* Transactions List */}
       <Card className="solid-card border-slate-800">
         <CardHeader>
-          <CardTitle className="text-xl font-bold text-white">
-            Lista de Transações ({filteredTransactions.length})
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl font-bold text-white">
+              Lista de Transações ({filteredTransactions.length})
+            </CardTitle>
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-400">
+                  {selectedIds.length} selecionada(s)
+                </span>
+                <Button
+                  data-testid="bulk-categorize-button"
+                  onClick={() => setBulkCategoryDialog(true)}
+                  className="bg-purple-600 hover:bg-purple-700"
+                  size="sm"
+                >
+                  <Tag className="w-4 h-4 mr-2" />
+                  Categorizar Selecionadas
+                </Button>
+                <Button
+                  onClick={() => setSelectedIds([])}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-400"
+                >
+                  Limpar
+                </Button>
+              </div>
+            )}
+          </div>
+          {filteredTransactions.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                data-testid="select-all-checkbox"
+                checked={selectedIds.length === filteredTransactions.length && filteredTransactions.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-500"
+              />
+              <label className="text-sm text-slate-400 cursor-pointer" onClick={handleSelectAll}>
+                Selecionar todas
+              </label>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -302,79 +342,20 @@ export default function Transactions() {
                 <div
                   key={transaction.id}
                   data-testid="transaction-item"
-                  className="glass-card p-4 rounded-xl border-slate-800 hover:border-blue-500/30 transition-all"
+                  className={`glass-card p-4 rounded-xl border-slate-800 hover:border-blue-500/30 transition-all ${
+                    selectedIds.includes(transaction.id) ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                  }`}
                 >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold text-white">
-                          {transaction.description}
-                        </h3>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            transaction.type === 'receita'
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-red-500/20 text-red-400'
-                          }`}
-                        >
-                          {transaction.type === 'receita' ? 'Receita' : 'Despesa'}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 text-sm text-slate-400">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          {formatDate(transaction.date)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4" />
-                          {getMemberName(transaction.member_id)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4" />
-                          {getBankName(transaction.bank_id)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4" />
-                          {getCategoryName(transaction.category_id)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <p
-                        className={`text-2xl font-bold font-mono ${
-                          transaction.type === 'receita' ? 'text-green-400' : 'text-red-400'
-                        }`}
-                      >
-                        {formatCurrency(transaction.amount)}
-                      </p>
-
-                      <div className="flex gap-2">
-                        <Button
-                          data-testid="edit-transaction-button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditDialog({ open: true, data: transaction })}
-                          className="text-blue-400 hover:text-blue-300 hover:bg-slate-800"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          data-testid="delete-transaction-button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(transaction.id)}
-                          className="text-red-400 hover:text-red-300 hover:bg-slate-800"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
+                  <div className="flex items-start gap-4">
+                    <input
+                      type="checkbox"
+                      data-testid="transaction-checkbox"
+                      checked={selectedIds.includes(transaction.id)}
+                      onChange={() => handleSelectOne(transaction.id)}
+                      className="mt-1 w-5 h-5 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">\n                        <div className="flex-1 space-y-2">\n                          <div className="flex items-center gap-3">\n                            <h3 className="text-lg font-semibold text-white">\n                              {transaction.description}\n                            </h3>\n                            <span\n                              className={`px-3 py-1 rounded-full text-xs font-semibold ${\n                                transaction.type === 'receita'\n                                  ? 'bg-green-500/20 text-green-400'\n                                  : 'bg-red-500/20 text-red-400'\n                              }`}\n                            >\n                              {transaction.type === 'receita' ? 'Receita' : 'Despesa'}\n                            </span>\n                          </div>\n\n                          <div className="flex flex-wrap gap-4 text-sm text-slate-400">\n                            <div className="flex items-center gap-2">\n                              <Calendar className="w-4 h-4" />\n                              {formatDate(transaction.date)}\n                            </div>\n                            <div className="flex items-center gap-2">\n                              <User className="w-4 h-4" />\n                              {getMemberName(transaction.member_id)}\n                            </div>\n                            <div className="flex items-center gap-2">\n                              <Building2 className="w-4 h-4" />\n                              {getBankName(transaction.bank_id)}\n                            </div>\n                            <div className="flex items-center gap-2">\n                              <Tag className="w-4 h-4" />\n                              {getCategoryName(transaction.category_id)}\n                            </div>\n                          </div>\n                        </div>\n\n                        <div className="flex items-center gap-4">\n                          <p\n                            className={`text-2xl font-bold font-mono ${\n                              transaction.type === 'receita' ? 'text-green-400' : 'text-red-400'\n                            }`}\n                          >\n                            {formatCurrency(transaction.amount)}\n                          </p>\n\n                          <div className="flex gap-2">\n                            <Button\n                              data-testid="edit-transaction-button"\n                              size="sm"\n                              variant="ghost"\n                              onClick={() => setEditDialog({ open: true, data: transaction })}\n                              className="text-blue-400 hover:text-blue-300 hover:bg-slate-800"\n                            >\n                              <Pencil className="w-4 h-4" />\n                            </Button>\n                            <Button\n                              data-testid="delete-transaction-button"\n                              size="sm"\n                              variant="ghost"\n                              onClick={() => handleDelete(transaction.id)}\n                              className="text-red-400 hover:text-red-300 hover:bg-slate-800"\n                            >\n                              <Trash2 className="w-4 h-4" />\n                            </Button>\n                          </div>\n                        </div>\n                      </div>\n                    </div>\n                  </div>\n                </div>\n              ))\n            ) : (
               <div className="py-12 text-center text-slate-500">
                 {searchTerm || filterType !== 'all'
                   ? 'Nenhuma transação encontrada com os filtros aplicados'
