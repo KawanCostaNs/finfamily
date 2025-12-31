@@ -101,3 +101,147 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Aplicativo de gestão financeira familiar com 3 bugs relatados:
+  1. Reserva de Emergência não aparece no Dashboard Kanban
+  2. Alguns gráficos mostram receita como despesa
+  3. Faltam filtros de mês/ano na página de Transações
+
+backend:
+  - task: "Emergency Reserve Calculation API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Corrigido endpoint /api/dashboard/emergency-reserve para calcular baseado em transações categorizadas como 'Reserva de Emergência'. Testado via curl - retorna R$ 2.000,00 corretamente."
+
+  - task: "Dashboard Summary API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "API /api/dashboard/summary funcionando corretamente, separando receitas e despesas por mês/ano."
+
+  - task: "Monthly Comparison API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "API /api/dashboard/monthly-comparison funcionando corretamente. Gráfico de barras mostra receita (verde) vs despesa (vermelho) separadamente."
+
+  - task: "Transactions Filter by Month/Year"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Backend já suportava filtros via query params. Frontend agora usa os filtros."
+
+frontend:
+  - task: "Emergency Reserve Kanban Card"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Dashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Card de Reserva de Emergência exibindo corretamente com valor R$ 2.000,00. Estilo dourado especial aplicado."
+
+  - task: "Dashboard Charts - Receita vs Despesa"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Dashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Gráfico de barras 'Receita vs Despesa' mostrando corretamente: barras verdes para receita, barras vermelhas para despesa. Screenshot confirmou separação visual correta."
+
+  - task: "Transactions Page - Month/Year Filters"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Transactions.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Adicionados filtros de mês e ano na página de transações. Filtro de mês tem opção 'Todos os meses' + 12 meses. Filtro de ano tem opção 'Todos' + anos 2023-2027. Filtragem funciona corretamente no frontend."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Emergency Reserve Kanban Card"
+    - "Dashboard Charts - Receita vs Despesa"
+    - "Transactions Page - Month/Year Filters"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Implementei correções para os 3 bugs reportados pelo usuário:
+      
+      1. RESERVA DE EMERGÊNCIA:
+         - Corrigido endpoint /api/dashboard/emergency-reserve para calcular baseado em transações categorizadas como "Reserva de Emergência"
+         - Card no Dashboard exibindo R$ 2.000,00 corretamente
+      
+      2. GRÁFICOS RECEITA vs DESPESA:
+         - Verificado que a lógica estava correta
+         - Gráfico de barras mostra corretamente barras verdes (receita) e vermelhas (despesa)
+         - Screenshots confirmam separação visual correta
+      
+      3. FILTROS MÊS/ANO NA PÁGINA TRANSAÇÕES:
+         - Adicionados dropdowns de mês e ano
+         - Mês: "Todos os meses" + Janeiro a Dezembro
+         - Ano: "Todos" + 2023-2027
+         - Filtragem implementada no frontend
+      
+      CREDENCIAIS DE TESTE:
+      - Email: super@finamily.com
+      - Password: Admin@2025
+      
+      DADOS DE TESTE CRIADOS:
+      - 10 transações (5 receitas, 5 despesas)
+      - Membro: João
+      - Banco: Nubank
+      - Categorias: Reserva de Emergência, Salário, Alimentação, Transporte
+      - 2 transações categorizadas como "Reserva de Emergência" totalizando R$ 2.000,00
+      
+      Por favor, teste:
+      1. Login e visualização do Dashboard
+      2. Card de Reserva de Emergência mostrando R$ 2.000,00
+      3. Gráfico "Receita vs Despesa" com barras separadas
+      4. Página de Transações com filtros de mês/ano funcionando
