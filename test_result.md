@@ -120,6 +120,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Corrigido endpoint /api/dashboard/emergency-reserve para calcular baseado em transações categorizadas como 'Reserva de Emergência'. Testado via curl - retorna R$ 2.000,00 corretamente."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: API returns exactly R$ 2.000,00 as expected. Two 'Depósito Reserva' transactions (R$ 1.000 each) properly categorized as 'Reserva de Emergência' and correctly calculated."
 
   - task: "Dashboard Summary API"
     implemented: true
@@ -132,6 +135,9 @@ backend:
       - working: true
         agent: "main"
         comment: "API /api/dashboard/summary funcionando corretamente, separando receitas e despesas por mês/ano."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: January 2025 data correctly returned - R$ 7.000 income, R$ 535 expenses. All required fields present."
 
   - task: "Monthly Comparison API"
     implemented: true
@@ -144,6 +150,9 @@ backend:
       - working: true
         agent: "main"
         comment: "API /api/dashboard/monthly-comparison funcionando corretamente. Gráfico de barras mostra receita (verde) vs despesa (vermelho) separadamente."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Chart data correctly separates receita vs despesa. January 2025 shows R$ 7.000 income, R$ 535 expenses (within expected ranges for green/red bar visualization)."
 
   - task: "Transactions Filter by Month/Year"
     implemented: true
@@ -156,6 +165,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Backend já suportava filtros via query params. Frontend agora usa os filtros."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Month/year filtering works correctly. January 2025 returns 5 transactions (not 4 as mentioned in review request, but filtering logic is correct). All transactions properly dated and filtered."
 
 frontend:
   - task: "Emergency Reserve Kanban Card"
