@@ -1,0 +1,58 @@
+{
+  "timestamp": "2025-12-31T05:56:23.246603",
+  "test_type": "FinFamily Bug Fix Testing",
+  "total_tests": 7,
+  "passed_tests": 6,
+  "success_rate": 85.71428571428571,
+  "results": [
+    {
+      "test": "Login API",
+      "success": true,
+      "details": "Successfully logged in as super@finamily.com",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "test": "Emergency Reserve API",
+      "success": true,
+      "details": "Reserve total calculation",
+      "expected": "R$ 2000.0",
+      "actual": "R$ 2000.0"
+    },
+    {
+      "test": "Dashboard Summary API",
+      "success": true,
+      "details": "January 2025 - Income: R$ 7000.0, Expenses: R$ 535.0",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "test": "Monthly Comparison API",
+      "success": true,
+      "details": "January 2025 - Income: R$ 7000.0, Expenses: R$ 535.0 (within expected ranges)",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "test": "Transactions API (All)",
+      "success": true,
+      "details": "Retrieved 10 total transactions",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "test": "Transactions API (January Filter)",
+      "success": false,
+      "details": "January 2025 filter count mismatch",
+      "expected": 4,
+      "actual": 5
+    },
+    {
+      "test": "Categories API",
+      "success": true,
+      "details": "Found 'Reserva de Emerg\u00eancia' category with type: especial",
+      "expected": null,
+      "actual": null
+    }
+  ]
+}
