@@ -181,6 +181,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Card de Reserva de Emergência exibindo corretamente com valor R$ 2.000,00. Estilo dourado especial aplicado."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Emergency Reserve card working perfectly. Shows exact amount R$ 2.000,00, has special golden/amber styling (border-amber-500/50, bg-gradient), displays appropriate message about expenses goal. Card visible with correct data-testid='emergency-reserve-card'."
 
   - task: "Dashboard Charts - Receita vs Despesa"
     implemented: true
@@ -193,6 +196,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Gráfico de barras 'Receita vs Despesa' mostrando corretamente: barras verdes para receita, barras vermelhas para despesa. Screenshot confirmou separação visual correta."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Revenue vs Expense chart working correctly. Chart visible with data-testid='monthly-comparison-chart', title shows 'Receita vs Despesa (2025)', GREEN bars for Receita and RED bars for Despesa clearly separated in legend and visualization. Chart contains data and renders properly."
 
   - task: "Transactions Page - Month/Year Filters"
     implemented: true
@@ -205,6 +211,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Adicionados filtros de mês e ano na página de transações. Filtro de mês tem opção 'Todos os meses' + 12 meses. Filtro de ano tem opção 'Todos' + anos 2023-2027. Filtragem funciona corretamente no frontend."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: All 3 transaction filters working perfectly. Month filter (data-testid='filter-month'), Year filter (data-testid='filter-year'), and Type filter (data-testid='filter-type') all visible and functional. Month filter successfully changed transaction count from 10 to 5 when filtering by January. Transaction counters update correctly: Total=5, Receitas=3, Despesas=2."
 
 metadata:
   created_by: "main_agent"
