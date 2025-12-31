@@ -658,8 +658,27 @@ async def mark_as_reserve(transaction_id: str, is_deposit: bool, user_id: str = 
 
 @api_router.get("/dashboard/emergency-reserve")
 async def get_emergency_reserve(user_id: str = Depends(verify_token)):
+    # Buscar a categoria "Reserva de Emergência"
+    reserve_category = await db.categories.find_one({"user_id": user_id, "name": "Reserva de Emergência"}, {"_id": 0})
+    reserve_category_id = reserve_category['id'] if reserve_category else None
+    
     transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    total = sum(trans['amount'] if trans.get('is_reserve_deposit') else -trans['amount'] if trans.get('is_reserve_withdrawal') else 0 for trans in transactions)
+    
+    total = 0
+    for trans in transactions:
+        # Método 1: Via flags is_reserve_deposit/is_reserve_withdrawal
+        if trans.get('is_reserve_deposit'):
+            total += trans['amount']
+        elif trans.get('is_reserve_withdrawal'):
+            total -= trans['amount']
+        # Método 2: Via categoria "Reserva de Emergência"
+        elif reserve_category_id and trans.get('category_id') == reserve_category_id:
+            # Se é receita na categoria reserva, adiciona. Se é despesa, subtrai
+            if trans.get('type') == 'receita':
+                total += trans['amount']
+            else:
+                total -= trans['amount']
+    
     return {"total": total}
 
 @api_router.get("/dashboard/summary", response_model=DashboardSummary)
