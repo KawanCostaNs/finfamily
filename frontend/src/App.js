@@ -43,6 +43,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="import" element={<Import />} />
             <Route path="transactions" element={<Transactions />} />
+            <Route path="goals" element={<Goals />} />
             <Route path="settings" element={<Settings />} />
             <Route path="admin" element={<Admin />} />
           </Route>
