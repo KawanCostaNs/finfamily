@@ -498,6 +498,299 @@ async def delete_category(category_id: str, user_id: str = Depends(verify_token)
 
 # Continue on next message due to length...
 
+# Transactions endpoints
+@api_router.post("/transactions/import")
+async def import_transactions(file: UploadFile = File(...), member_id: str = Form(...), bank_id: str = Form(...), user_id: str = Depends(verify_token)):
+    content = await file.read()
+    file_extension = file.filename.lower().split('.')[-1] if file.filename else ''
+    transactions, duplicates_count = [], 0
+    
+    try:
+        if file_extension == 'csv':
+            csv_content = content.decode('utf-8')
+            lines = csv_content.split('\n')
+            data_start = 0
+            for i, line in enumerate(lines):
+                if 'Data' in line and ('Lançamento' in line or 'Lancamento' in line or 'Valor' in line):
+                    data_start = i
+                    break
+            csv_data = '\n'.join(lines[data_start:])
+            delimiter = ';' if ';' in csv_data.split('\n')[0] else ','
+            csv_reader = csv.DictReader(io.StringIO(csv_data), delimiter=delimiter)
+            
+            for row in csv_reader:
+                try:
+                    date_str = (row.get('Data Lançamento') or row.get('Data Lancamento') or row.get('Data') or row.get('date') or row.get('Date') or row.get('DATA') or '').strip()
+                    description = (row.get('Descrição') or row.get('Descricao') or row.get('Histórico') or row.get('Historico') or row.get('description') or row.get('Description') or row.get('DESCRICAO') or 'N/A').strip()
+                    amount_str = (row.get('Valor') or row.get('amount') or row.get('Amount') or row.get('VALOR') or '0').strip()
+                    
+                    if not amount_str or amount_str == '0':
+                        continue
+                    
+                    amount_str = amount_str.replace('R$', '').replace('$', '').replace(' ', '')
+                    if ',' in amount_str:
+                        parts = amount_str.rsplit(',', 1)
+                        integer_part = parts[0].replace('.', '')
+                        decimal_part = parts[1] if len(parts) > 1 else '00'
+                        amount_str = f"{integer_part}.{decimal_part}"
+                    
+                    amount = float(amount_str)
+                    trans_type = 'receita' if amount > 0 else 'despesa'
+                    trans_date = datetime.now(timezone.utc)
+                    
+                    if date_str:
+                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+                            try:
+                                trans_date = datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
+                                break
+                            except:
+                                continue
+                    
+                    existing = await db.transactions.find_one({"user_id": user_id, "date": trans_date.isoformat(), "description": description, "amount": abs(amount), "member_id": member_id, "bank_id": bank_id})
+                    if existing:
+                        duplicates_count += 1
+                        continue
+                    
+                    transaction = Transaction(date=trans_date, description=description, amount=abs(amount), type=trans_type, member_id=member_id, bank_id=bank_id)
+                    transactions.append(transaction)
+                except Exception as e:
+                    logging.error(f"Error parsing CSV row: {e}")
+                    continue
+        
+        elif file_extension == 'ofx':
+            ofx = OfxParser.parse(io.BytesIO(content))
+            for account in ofx.accounts:
+                for trans in account.statement.transactions:
+                    amount = float(trans.amount)
+                    trans_type = 'receita' if amount > 0 else 'despesa'
+                    trans_date = trans.date.replace(tzinfo=timezone.utc) if trans.date else datetime.now(timezone.utc)
+                    description = trans.memo or trans.payee or 'N/A'
+                    
+                    existing = await db.transactions.find_one({"user_id": user_id, "date": trans_date.isoformat(), "description": description, "amount": abs(amount), "member_id": member_id, "bank_id": bank_id})
+                    if existing:
+                        duplicates_count += 1
+                        continue
+                    
+                    transaction = Transaction(date=trans_date, description=description, amount=abs(amount), type=trans_type, member_id=member_id, bank_id=bank_id)
+                    transactions.append(transaction)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+        
+        if transactions:
+            docs = []
+            for trans in transactions:
+                doc = trans.model_dump()
+                doc['date'] = doc['date'].isoformat()
+                doc['created_at'] = doc['created_at'].isoformat()
+                doc['user_id'] = user_id
+                docs.append(doc)
+            await db.transactions.insert_many(docs)
+        
+        message = f"Successfully imported {len(transactions)} new transactions"
+        if duplicates_count > 0:
+            message += f" ({duplicates_count} duplicates skipped)"
+        
+        return {"message": message, "count": len(transactions), "duplicates": duplicates_count, "total_processed": len(transactions) + duplicates_count}
+    except Exception as e:
+        logging.error(f"Error importing: {e}")
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+
+@api_router.get("/transactions", response_model=List[Transaction])
+async def get_transactions(month: Optional[int] = None, year: Optional[int] = None, user_id: str = Depends(verify_token)):
+    query = {"user_id": user_id}
+    transactions = await db.transactions.find(query, {"_id": 0}).to_list(10000)
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+        if isinstance(trans['created_at'], str):
+            trans['created_at'] = datetime.fromisoformat(trans['created_at'])
+    if month and year:
+        transactions = [t for t in transactions if t['date'].month == month and t['date'].year == year]
+    return sorted(transactions, key=lambda x: x['date'], reverse=True)
+
+@api_router.get("/transactions/{transaction_id}", response_model=Transaction)
+async def get_transaction(transaction_id: str, user_id: str = Depends(verify_token)):
+    trans = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
+    if not trans:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if isinstance(trans['date'], str):
+        trans['date'] = datetime.fromisoformat(trans['date'])
+    if isinstance(trans['created_at'], str):
+        trans['created_at'] = datetime.fromisoformat(trans['created_at'])
+    return Transaction(**trans)
+
+@api_router.put("/transactions/{transaction_id}", response_model=Transaction)
+async def update_transaction(transaction_id: str, transaction: TransactionCreate, user_id: str = Depends(verify_token)):
+    update_data = transaction.model_dump()
+    update_data['date'] = update_data['date'].isoformat()
+    result = await db.transactions.update_one({"id": transaction_id, "user_id": user_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    updated = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+    if isinstance(updated['date'], str):
+        updated['date'] = datetime.fromisoformat(updated['date'])
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return Transaction(**updated)
+
+@api_router.delete("/transactions/{transaction_id}")
+async def delete_transaction(transaction_id: str, user_id: str = Depends(verify_token)):
+    result = await db.transactions.delete_one({"id": transaction_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"message": "Transaction deleted successfully"}
+
+class BulkCategorizeRequest(BaseModel):
+    transaction_ids: List[str]
+    category_id: str
+
+@api_router.post("/transactions/bulk-categorize")
+async def bulk_categorize_transactions(data: BulkCategorizeRequest, user_id: str = Depends(verify_token)):
+    result = await db.transactions.update_many({"id": {"$in": data.transaction_ids}, "user_id": user_id}, {"$set": {"category_id": data.category_id}})
+    return {"message": f"Successfully categorized {result.modified_count} transactions", "count": result.modified_count}
+
+@api_router.post("/transactions/{transaction_id}/mark-reserve")
+async def mark_as_reserve(transaction_id: str, is_deposit: bool, user_id: str = Depends(verify_token)):
+    result = await db.transactions.update_one({"id": transaction_id, "user_id": user_id}, {"$set": {"is_reserve_deposit": is_deposit if is_deposit else False, "is_reserve_withdrawal": not is_deposit if not is_deposit else False}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"message": "Transaction marked successfully"}
+
+@api_router.get("/dashboard/emergency-reserve")
+async def get_emergency_reserve(user_id: str = Depends(verify_token)):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    total = sum(trans['amount'] if trans.get('is_reserve_deposit') else -trans['amount'] if trans.get('is_reserve_withdrawal') else 0 for trans in transactions)
+    return {"total": total}
+
+@api_router.get("/dashboard/summary", response_model=DashboardSummary)
+async def get_dashboard_summary(month: int, year: int, user_id: str = Depends(verify_token)):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    current_month_trans = [t for t in transactions if t['date'].month == month and t['date'].year == year]
+    previous_month = month - 1 if month > 1 else 12
+    previous_year = year if month > 1 else year - 1
+    previous_trans = [t for t in transactions if (t['date'].year < previous_year) or (t['date'].year == previous_year and t['date'].month < previous_month) or (t['date'].year == previous_year and t['date'].month == previous_month)]
+    previous_balance = sum(t['amount'] if t['type'] == 'receita' else -t['amount'] for t in previous_trans)
+    month_income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
+    month_expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
+    return DashboardSummary(previous_balance=previous_balance, month_income=month_income, month_expenses=month_expenses, final_balance=previous_balance + month_income - month_expenses)
+
+@api_router.get("/dashboard/category-chart", response_model=List[CategoryChart])
+async def get_category_chart(month: int, year: int, user_id: str = Depends(verify_token)):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    category_map = {c['id']: c['name'] for c in categories}
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    current_month_trans = [t for t in transactions if t['date'].month == month and t['date'].year == year and t['type'] == 'despesa']
+    category_totals = {}
+    for trans in current_month_trans:
+        cat_id = trans.get('category_id')
+        cat_name = category_map.get(cat_id, 'Sem Categoria') if cat_id else 'Sem Categoria'
+        category_totals[cat_name] = category_totals.get(cat_name, 0) + trans['amount']
+    total = sum(category_totals.values())
+    result = [CategoryChart(category=cat, amount=amount, percentage=round((amount/total*100) if total > 0 else 0, 2)) for cat, amount in category_totals.items()]
+    return sorted(result, key=lambda x: x.amount, reverse=True)
+
+@api_router.get("/dashboard/monthly-comparison", response_model=List[MonthlyComparison])
+async def get_monthly_comparison(year: int, user_id: str = Depends(verify_token)):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    for trans in transactions:
+        if isinstance(trans['date'], str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    year_trans = [t for t in transactions if t['date'].year == year]
+    month_names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    result = []
+    for month_num in range(1, 13):
+        month_trans = [t for t in year_trans if t['date'].month == month_num]
+        income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
+        expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
+        result.append(MonthlyComparison(month=month_names[month_num-1], income=income, expenses=expenses))
+    return result
+
+# Goals endpoints
+class Goal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    target_amount: float
+    current_amount: float = 0.0
+    deadline: Optional[datetime] = None
+    image_url: Optional[str] = None
+    monthly_contribution: float = 0.0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class GoalCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    target_amount: float
+    deadline: Optional[datetime] = None
+    image_url: Optional[str] = None
+    monthly_contribution: float = 0.0
+
+class GoalContribution(BaseModel):
+    amount: float
+
+@api_router.post("/goals", response_model=Goal)
+async def create_goal(goal: GoalCreate, user_id: str = Depends(verify_token)):
+    goal_obj = Goal(**goal.model_dump())
+    doc = goal_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    if doc.get('deadline'):
+        doc['deadline'] = doc['deadline'].isoformat()
+    doc['user_id'] = user_id
+    await db.goals.insert_one(doc)
+    return goal_obj
+
+@api_router.get("/goals", response_model=List[Goal])
+async def get_goals(user_id: str = Depends(verify_token)):
+    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for goal in goals:
+        if isinstance(goal['created_at'], str):
+            goal['created_at'] = datetime.fromisoformat(goal['created_at'])
+        if goal.get('deadline') and isinstance(goal['deadline'], str):
+            goal['deadline'] = datetime.fromisoformat(goal['deadline'])
+    return goals
+
+@api_router.put("/goals/{goal_id}", response_model=Goal)
+async def update_goal(goal_id: str, goal: GoalCreate, user_id: str = Depends(verify_token)):
+    update_data = goal.model_dump()
+    if update_data.get('deadline'):
+        update_data['deadline'] = update_data['deadline'].isoformat()
+    result = await db.goals.update_one({"id": goal_id, "user_id": user_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    updated = await db.goals.find_one({"id": goal_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    if updated.get('deadline') and isinstance(updated['deadline'], str):
+        updated['deadline'] = datetime.fromisoformat(updated['deadline'])
+    return Goal(**updated)
+
+@api_router.post("/goals/{goal_id}/contribute")
+async def add_goal_contribution(goal_id: str, contribution: GoalContribution, user_id: str = Depends(verify_token)):
+    result = await db.goals.update_one({"id": goal_id, "user_id": user_id}, {"$inc": {"current_amount": contribution.amount}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    updated = await db.goals.find_one({"id": goal_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    if updated.get('deadline') and isinstance(updated['deadline'], str):
+        updated['deadline'] = datetime.fromisoformat(updated['deadline'])
+    return Goal(**updated)
+
+@api_router.delete("/goals/{goal_id}")
+async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
+    result = await db.goals.delete_one({"id": goal_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return {"message": "Goal deleted successfully"}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
