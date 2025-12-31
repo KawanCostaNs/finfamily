@@ -28,6 +28,7 @@ export default function Layout() {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/import', label: 'Importar', icon: Upload },
     { path: '/transactions', label: 'Transações', icon: List },
+    { path: '/goals', label: 'Metas', icon: Target },
     { path: '/settings', label: 'Configurações', icon: Settings },
   ];
 
