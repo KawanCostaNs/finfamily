@@ -152,6 +152,31 @@ class MonthlyComparison(BaseModel):
     income: float
     expenses: float
 
+
+class Goal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    target_amount: float
+    current_amount: float = 0.0
+    deadline: Optional[datetime] = None
+    image_url: Optional[str] = None
+    monthly_contribution: float = 0.0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class GoalCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    target_amount: float
+    deadline: Optional[datetime] = None
+    image_url: Optional[str] = None
+    monthly_contribution: float = 0.0
+
+class GoalContribution(BaseModel):
+    amount: float
+
+
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         token = credentials.credentials
