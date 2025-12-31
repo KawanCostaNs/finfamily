@@ -44,6 +44,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [editDialog, setEditDialog] = useState({ open: false, data: null });
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkCategoryDialog, setBulkCategoryDialog] = useState(false);
