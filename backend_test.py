@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 
 class FinancialAppTester:
-    def __init__(self, base_url="https://home-finance-45.preview.emergentagent.com"):
+    def __init__(self, base_url="https://moneymaster-32.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
