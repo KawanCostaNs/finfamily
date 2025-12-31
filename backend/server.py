@@ -365,3 +365,110 @@ async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
     return {"message": "Goal deleted successfully"}
 
 # Continue with remaining endpoints...
+
+# Family endpoints
+@api_router.post("/family", response_model=FamilyMember)
+async def create_family_member(member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
+    member_obj = FamilyMember(**member.model_dump())
+    doc = member_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.family_members.insert_one(doc)
+    return member_obj
+
+@api_router.get("/family", response_model=List[FamilyMember])
+async def get_family_members(user_id: str = Depends(verify_token)):
+    members = await db.family_members.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for member in members:
+        if isinstance(member['created_at'], str):
+            member['created_at'] = datetime.fromisoformat(member['created_at'])
+    return members
+
+@api_router.put("/family/{member_id}", response_model=FamilyMember)
+async def update_family_member(member_id: str, member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
+    result = await db.family_members.update_one({"id": member_id, "user_id": user_id}, {"$set": member.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    updated = await db.family_members.find_one({"id": member_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return FamilyMember(**updated)
+
+@api_router.delete("/family/{member_id}")
+async def delete_family_member(member_id: str, user_id: str = Depends(verify_token)):
+    result = await db.family_members.delete_one({"id": member_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"message": "Member deleted successfully"}
+
+# Banks endpoints
+@api_router.post("/banks", response_model=Bank)
+async def create_bank(bank: BankCreate, user_id: str = Depends(verify_token)):
+    bank_obj = Bank(**bank.model_dump())
+    doc = bank_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.banks.insert_one(doc)
+    return bank_obj
+
+@api_router.get("/banks", response_model=List[Bank])
+async def get_banks(user_id: str = Depends(verify_token)):
+    banks = await db.banks.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for bank in banks:
+        if isinstance(bank['created_at'], str):
+            bank['created_at'] = datetime.fromisoformat(bank['created_at'])
+    return banks
+
+@api_router.put("/banks/{bank_id}", response_model=Bank)
+async def update_bank(bank_id: str, bank: BankCreate, user_id: str = Depends(verify_token)):
+    result = await db.banks.update_one({"id": bank_id, "user_id": user_id}, {"$set": bank.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    updated = await db.banks.find_one({"id": bank_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return Bank(**updated)
+
+@api_router.delete("/banks/{bank_id}")
+async def delete_bank(bank_id: str, user_id: str = Depends(verify_token)):
+    result = await db.banks.delete_one({"id": bank_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    return {"message": "Bank deleted successfully"}
+
+# Categories endpoints
+@api_router.post("/categories", response_model=Category)
+async def create_category(category: CategoryCreate, user_id: str = Depends(verify_token)):
+    category_obj = Category(**category.model_dump())
+    doc = category_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.categories.insert_one(doc)
+    return category_obj
+
+@api_router.get("/categories", response_model=List[Category])
+async def get_categories(user_id: str = Depends(verify_token)):
+    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for category in categories:
+        if isinstance(category['created_at'], str):
+            category['created_at'] = datetime.fromisoformat(category['created_at'])
+    return categories
+
+@api_router.put("/categories/{category_id}", response_model=Category)
+async def update_category(category_id: str, category: CategoryCreate, user_id: str = Depends(verify_token)):
+    result = await db.categories.update_one({"id": category_id, "user_id": user_id}, {"$set": category.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    updated = await db.categories.find_one({"id": category_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return Category(**updated)
+
+@api_router.delete("/categories/{category_id}")
+async def delete_category(category_id: str, user_id: str = Depends(verify_token)):
+    result = await db.categories.delete_one({"id": category_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"message": "Category deleted successfully"}
+
+# Continue on next message due to length...
