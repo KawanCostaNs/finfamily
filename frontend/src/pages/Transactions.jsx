@@ -44,8 +44,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
-  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const [filterMonth, setFilterMonth] = useState(0); // 0 = todos os meses
+  const [filterYear, setFilterYear] = useState(0); // 0 = todos os anos
   const [editDialog, setEditDialog] = useState({ open: false, data: null });
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkCategoryDialog, setBulkCategoryDialog] = useState(false);
@@ -59,7 +59,7 @@ export default function Transactions() {
 
   useEffect(() => {
     filterTransactions();
-  }, [transactions, searchTerm, filterType]);
+  }, [transactions, searchTerm, filterType, filterMonth, filterYear]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -102,6 +102,22 @@ export default function Transactions() {
 
     if (filterType !== 'all') {
       filtered = filtered.filter((t) => t.type === filterType);
+    }
+
+    // Filtro por mês
+    if (filterMonth > 0) {
+      filtered = filtered.filter((t) => {
+        const transDate = new Date(t.date);
+        return transDate.getMonth() + 1 === filterMonth;
+      });
+    }
+
+    // Filtro por ano
+    if (filterYear > 0) {
+      filtered = filtered.filter((t) => {
+        const transDate = new Date(t.date);
+        return transDate.getFullYear() === filterYear;
+      });
     }
 
     setFilteredTransactions(filtered);
@@ -248,9 +264,49 @@ export default function Transactions() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-slate-400" />
+              <Select value={filterMonth.toString()} onValueChange={(v) => setFilterMonth(parseInt(v))}>
+                <SelectTrigger data-testid="filter-month" className="w-[140px] bg-slate-950 border-slate-800 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800">
+                  <SelectItem value="0" className="text-white">Todos os meses</SelectItem>
+                  <SelectItem value="1" className="text-white">Janeiro</SelectItem>
+                  <SelectItem value="2" className="text-white">Fevereiro</SelectItem>
+                  <SelectItem value="3" className="text-white">Março</SelectItem>
+                  <SelectItem value="4" className="text-white">Abril</SelectItem>
+                  <SelectItem value="5" className="text-white">Maio</SelectItem>
+                  <SelectItem value="6" className="text-white">Junho</SelectItem>
+                  <SelectItem value="7" className="text-white">Julho</SelectItem>
+                  <SelectItem value="8" className="text-white">Agosto</SelectItem>
+                  <SelectItem value="9" className="text-white">Setembro</SelectItem>
+                  <SelectItem value="10" className="text-white">Outubro</SelectItem>
+                  <SelectItem value="11" className="text-white">Novembro</SelectItem>
+                  <SelectItem value="12" className="text-white">Dezembro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Select value={filterYear.toString()} onValueChange={(v) => setFilterYear(parseInt(v))}>
+                <SelectTrigger data-testid="filter-year" className="w-[100px] bg-slate-950 border-slate-800 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800">
+                  <SelectItem value="0" className="text-white">Todos</SelectItem>
+                  {[2023, 2024, 2025, 2026, 2027].map((y) => (
+                    <SelectItem key={y} value={y.toString()} className="text-white">
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
               <Filter className="w-5 h-5 text-slate-400" />
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger data-testid="filter-type" className="w-[180px] bg-slate-950 border-slate-800 text-white">
+                <SelectTrigger data-testid="filter-type" className="w-[140px] bg-slate-950 border-slate-800 text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-800">
