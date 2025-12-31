@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Import from './pages/Import';
 import Transactions from './pages/Transactions';
+import Goals from './pages/Goals';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import Layout from './components/Layout';
