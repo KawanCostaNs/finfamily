@@ -345,7 +345,7 @@ export default function Settings() {
           {members.length === 0 && (
             <Card className="solid-card border-slate-800">
               <CardContent className="py-12 text-center text-slate-500">
-                Nenhum membro cadastrado. Clique em "Adicionar Membro" para começar.
+                Nenhum membro cadastrado. Clique em &quot;Adicionar Membro&quot; para começar.
               </CardContent>
             </Card>
           )}
