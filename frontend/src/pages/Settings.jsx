@@ -915,8 +915,8 @@ function RuleDialog({ open, data, categories, onClose, onSave }) {
 
           <div className="bg-slate-800/50 rounded-lg p-3 mt-4">
             <p className="text-sm text-slate-300">
-              <span className="text-cyan-400">Exemplo:</span> Se a descrição contiver "{keyword || 'uber'}", 
-              a transação será categorizada como "{categories.find(c => c.id === categoryId)?.name || 'Transporte'}".
+              <span className="text-cyan-400">Exemplo:</span> Se a descrição contiver &quot;{keyword || 'uber'}&quot;, 
+              a transação será categorizada como &quot;{categories.find(c => c.id === categoryId)?.name || 'Transporte'}&quot;.
             </p>
           </div>
 
