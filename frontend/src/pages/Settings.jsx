@@ -560,7 +560,7 @@ export default function Settings() {
                 <Wand2 className="w-12 h-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-400 mb-2">Nenhuma regra de categorização criada.</p>
                 <p className="text-sm text-slate-500">
-                  Exemplo: "uber" → Transporte, "mercado" → Alimentação
+                  Exemplo: &quot;uber&quot; → Transporte, &quot;mercado&quot; → Alimentação
                 </p>
               </CardContent>
             </Card>
