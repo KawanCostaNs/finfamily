@@ -160,11 +160,14 @@ backend:
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Implementados endpoints CRUD para desafios em família. Testado criação de desafio 'Economizar na Energia' via curl."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Family Challenges CRUD working perfectly. Found existing 'Economizar na Energia' challenge. Successfully tested: GET /api/gamification/challenges (lists challenges), POST /api/gamification/challenges (creates new challenge), POST /api/gamification/challenges/{id}/progress (updates progress correctly from 0 to 50), DELETE /api/gamification/challenges/{id} (deletes challenge). All CRUD operations validated."
 
   - task: "Dashboard Summary API"
     implemented: true
