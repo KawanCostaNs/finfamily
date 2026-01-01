@@ -1,98 +1,69 @@
 {
-  "timestamp": "2025-12-29T21:34:26.702335",
-  "total_tests": 18,
-  "passed_tests": 18,
+  "timestamp": "2026-01-01T00:25:42.110996",
+  "test_type": "new_features",
+  "total_tests": 12,
+  "passed_tests": 12,
   "success_rate": 100.0,
   "results": [
     {
-      "test": "User Registration",
+      "test": "Login with Test User",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "User Login",
+      "test": "Get Profile Data",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Create Family Member",
+      "test": "Profile Data Structure",
+      "success": true,
+      "details": "All required fields present"
+    },
+    {
+      "test": "Update Profile Name",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Get Family Members",
+      "test": "Profile Name Update Verification",
+      "success": true,
+      "details": "Name updated correctly"
+    },
+    {
+      "test": "Restore Original Profile Name",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Update Family Member",
+      "test": "Change Password with Wrong Current Password",
+      "success": true,
+      "details": "Status: 400"
+    },
+    {
+      "test": "Delete All Transactions Endpoint Exists",
+      "success": true,
+      "details": "Status: 401"
+    },
+    {
+      "test": "Get Categories for Filter Test",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Delete Family Member",
+      "test": "Find Emergency Reserve Category",
+      "success": true,
+      "details": "Found category with ID: 869ff41e-c198-4a61-8ef8-aa20b0184a11"
+    },
+    {
+      "test": "Get All Transactions",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Create Bank",
+      "test": "Emergency Reserve Transactions Count",
       "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Get Banks",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Update Bank",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Delete Bank",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Create Category",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Get Categories",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Update Category",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Delete Category",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Dashboard Summary",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Category Chart Data",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Monthly Comparison Data",
-      "success": true,
-      "details": "Status: 200"
-    },
-    {
-      "test": "Get Transactions",
-      "success": true,
-      "details": "Status: 200"
+      "details": "Found 2 transactions as expected"
     }
   ]
 }
