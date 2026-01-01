@@ -479,34 +479,43 @@ class FinancialAppTester:
         
         return success
 
-    def run_all_tests(self):
-        """Run all backend tests"""
-        print("🚀 Starting Financial App Backend Tests")
+    def run_new_features_tests(self):
+        """Run tests for new features specifically mentioned in review request"""
+        print("🚀 Starting FinFamily New Features Backend Tests")
         print("=" * 50)
         
-        # Test authentication
-        if not self.test_auth_register():
-            print("❌ Registration failed, stopping tests")
+        # Test authentication with existing user
+        if not self.test_auth_login_existing_user():
+            print("❌ Login with test user failed, stopping tests")
             return False
             
-        if not self.test_auth_login():
-            print("❌ Login failed, stopping tests")
-            return False
-            
-        # Test CRUD operations
-        self.test_family_crud()
-        self.test_banks_crud()
-        self.test_categories_crud()
+        print(f"✅ Authenticated as: {self.user_data.get('name')} ({self.user_data.get('email')})")
+        print(f"✅ Admin status: {self.user_data.get('is_admin')}")
+        print()
         
-        # Test dashboard endpoints
-        self.test_dashboard_endpoints()
+        # Test new profile endpoints
+        print("📋 Testing Profile Endpoints...")
+        self.test_profile_endpoints()
+        print()
         
-        # Test transactions
-        self.test_transactions_endpoints()
+        # Test password change endpoint
+        print("🔒 Testing Password Change...")
+        self.test_change_password_endpoint()
+        print()
+        
+        # Test delete all transactions endpoint existence
+        print("🗑️ Testing Delete All Transactions Endpoint...")
+        self.test_delete_all_transactions_endpoint()
+        print()
+        
+        # Test category filtering for transactions
+        print("🏷️ Testing Category Filter for Transactions...")
+        self.test_transactions_with_category_filter()
+        print()
         
         # Print summary
-        print("\n" + "=" * 50)
-        print(f"📊 Tests Summary: {self.tests_passed}/{self.tests_run} passed")
+        print("=" * 50)
+        print(f"📊 New Features Tests Summary: {self.tests_passed}/{self.tests_run} passed")
         print(f"✅ Success Rate: {(self.tests_passed/self.tests_run)*100:.1f}%")
         
         return self.tests_passed == self.tests_run
