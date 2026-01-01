@@ -32,11 +32,13 @@ export default function Settings() {
   const [members, setMembers] = useState([]);
   const [banks, setBanks] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [memberDialog, setMemberDialog] = useState({ open: false, data: null });
   const [bankDialog, setBankDialog] = useState({ open: false, data: null });
   const [categoryDialog, setCategoryDialog] = useState({ open: false, data: null });
+  const [ruleDialog, setRuleDialog] = useState({ open: false, data: null });
 
   const token = localStorage.getItem('token');
 
@@ -47,15 +49,17 @@ export default function Settings() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [membersRes, banksRes, categoriesRes] = await Promise.all([
+      const [membersRes, banksRes, categoriesRes, rulesRes] = await Promise.all([
         axios.get(`${API}/family`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/banks`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/categories`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/categorization-rules`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       setMembers(membersRes.data);
       setBanks(banksRes.data);
       setCategories(categoriesRes.data);
+      setRules(rulesRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Erro ao carregar configurações');
