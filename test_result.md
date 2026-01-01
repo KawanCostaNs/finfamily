@@ -291,32 +291,35 @@ agent_communication:
       
       ALL CRITICAL BACKEND FUNCTIONALITY IS WORKING CORRECTLY
 
-  - agent: "testing"
+  - agent: "main"
     message: |
-      FRONTEND UI TESTING COMPLETED - ALL 3 BUG FIXES VERIFIED WORKING ✅
+      NOVAS FUNCIONALIDADES IMPLEMENTADAS:
       
-      🎯 BUG FIX #1 - EMERGENCY RESERVE CARD: ✅ WORKING
-      - Card visible with correct data-testid="emergency-reserve-card"
-      - Shows exact amount R$ 2.000,00 as required
-      - Special golden/amber styling applied (border-amber-500/50, gradient background)
-      - Displays appropriate message about expenses goal
+      1. FILTRO DE CATEGORIA NA PÁGINA DE TRANSAÇÕES:
+         - Adicionado dropdown com todas as categorias
+         - Opções: "Todas categorias", "Sem categoria", e categorias do usuário
+         - Filtragem funciona corretamente
       
-      🎯 BUG FIX #2 - REVENUE vs EXPENSE CHART: ✅ WORKING  
-      - Chart visible with data-testid="monthly-comparison-chart"
-      - Title correctly shows "Receita vs Despesa (2025)"
-      - GREEN bars represent RECEITA (income)
-      - RED bars represent DESPESA (expenses)
-      - Bars are properly separated and legend shows correct colors
-      - Chart contains data and renders correctly
+      2. PÁGINA DE PERFIL COMPLETA:
+         - Seção de informações pessoais (foto, nome, email)
+         - Upload de foto de perfil
+         - Seção de segurança com "Alterar Senha"
+         - Seção de preferências (notificações, tema escuro)
+         - Data de criação da conta
+         - Badge de "Administrador" para admins
       
-      🎯 BUG FIX #3 - TRANSACTION FILTERS: ✅ WORKING
-      - All 3 filters present: Month (data-testid="filter-month"), Year (data-testid="filter-year"), Type (data-testid="filter-type")
-      - Month filter functionality verified: changed transaction count from 10 to 5 when filtering by January
-      - Transaction counters update correctly: Total=5, Receitas=3, Despesas=2
-      - All filters are visible and functional
+      3. BOTÃO "EXCLUIR TODAS AS TRANSAÇÕES":
+         - Localizado na "Zona de Perigo" da página de Perfil
+         - Modal de confirmação com aviso IRREVERSÍVEL
+         - Requer digitar "EXCLUIR TUDO" para confirmar
+         - Botões Cancelar e Excluir Permanentemente
       
-      AUTHENTICATION TESTED:
-      - Login successful with credentials: super@finamily.com / Admin@2025
-      - Navigation between Dashboard and Transactions pages working
+      ENDPOINTS DE BACKEND CRIADOS:
+         - GET /api/profile - Buscar dados do perfil
+         - PUT /api/profile - Atualizar perfil (nome, foto, preferências)
+         - POST /api/profile/change-password - Alterar senha
+         - DELETE /api/transactions/delete-all - Excluir todas transações
       
-      ALL REQUESTED BUG FIXES ARE WORKING PERFECTLY IN THE UI
+      CREDENCIAIS DE TESTE:
+      - Email: super@finamily.com
+      - Password: Admin@2025
