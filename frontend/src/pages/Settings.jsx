@@ -404,7 +404,7 @@ export default function Settings() {
           {banks.length === 0 && (
             <Card className="solid-card border-slate-800">
               <CardContent className="py-12 text-center text-slate-500">
-                Nenhum banco cadastrado. Clique em "Adicionar Banco" para começar.
+                Nenhum banco cadastrado. Clique em &quot;Adicionar Banco&quot; para começar.
               </CardContent>
             </Card>
           )}
