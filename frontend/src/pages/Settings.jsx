@@ -513,7 +513,7 @@ export default function Settings() {
                             {getMatchTypeLabel(rule.match_type)}
                           </span>
                           <span className="px-2 py-1 rounded bg-cyan-900/50 text-cyan-300 font-mono text-sm">
-                            "{rule.keyword}"
+                            &quot;{rule.keyword}&quot;
                           </span>
                           <span className="text-slate-400">→</span>
                           <span className="px-2 py-0.5 rounded bg-blue-900/50 text-blue-300 text-sm">
