@@ -631,7 +631,7 @@ export function FamilyChallengesWidget() {
               Registrar Economia
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Quanto vocês economizaram no desafio "{selectedChallenge?.name}"?
+              Quanto vocês economizaram no desafio &quot;{selectedChallenge?.name}&quot;?
             </DialogDescription>
           </DialogHeader>
           
