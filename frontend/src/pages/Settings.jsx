@@ -800,3 +800,141 @@ function CategoryDialog({ open, data, onClose, onSave }) {
     </Dialog>
   );
 }
+
+function RuleDialog({ open, data, categories, onClose, onSave }) {
+  const [keyword, setKeyword] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [matchType, setMatchType] = useState('contains');
+  const [priority, setPriority] = useState(0);
+
+  useEffect(() => {
+    if (data) {
+      setKeyword(data.keyword);
+      setCategoryId(data.category_id);
+      setMatchType(data.match_type || 'contains');
+      setPriority(data.priority || 0);
+    } else {
+      setKeyword('');
+      setCategoryId('');
+      setMatchType('contains');
+      setPriority(0);
+    }
+  }, [data, open]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!categoryId) {
+      return;
+    }
+    onSave({ 
+      keyword, 
+      category_id: categoryId, 
+      match_type: matchType,
+      priority: parseInt(priority) || 0,
+      is_active: data?.is_active ?? true
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="bg-slate-900 border-slate-800 text-white">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Wand2 className="w-5 h-5 text-cyan-400" />
+            {data ? 'Editar Regra' : 'Nova Regra de Categorização'}
+          </DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Configure quando uma transação deve ser categorizada automaticamente
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="rule-keyword">Palavra-chave</Label>
+            <Input
+              id="rule-keyword"
+              data-testid="rule-keyword-input"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="Ex: uber, mercado, netflix"
+              required
+              className="bg-slate-950 border-slate-800 text-white"
+            />
+            <p className="text-xs text-slate-500">
+              A palavra que será buscada na descrição da transação
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="rule-match-type">Tipo de Correspondência</Label>
+            <Select value={matchType} onValueChange={setMatchType}>
+              <SelectTrigger id="rule-match-type" data-testid="rule-match-type-select" className="bg-slate-950 border-slate-800 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-800">
+                <SelectItem value="contains" className="text-white">Contém - A descrição contém a palavra</SelectItem>
+                <SelectItem value="starts_with" className="text-white">Começa com - A descrição começa com a palavra</SelectItem>
+                <SelectItem value="exact" className="text-white">Exato - A descrição é exatamente igual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="rule-category">Categoria</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger id="rule-category" data-testid="rule-category-select" className="bg-slate-950 border-slate-800 text-white">
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-800">
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id} className="text-white">
+                    {cat.name} ({cat.type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500">
+              A categoria que será aplicada quando a regra corresponder
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="rule-priority">Prioridade (opcional)</Label>
+            <Input
+              id="rule-priority"
+              data-testid="rule-priority-input"
+              type="number"
+              min="0"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="bg-slate-950 border-slate-800 text-white"
+            />
+            <p className="text-xs text-slate-500">
+              Regras com maior prioridade são aplicadas primeiro (0 = padrão)
+            </p>
+          </div>
+
+          <div className="bg-slate-800/50 rounded-lg p-3 mt-4">
+            <p className="text-sm text-slate-300">
+              <span className="text-cyan-400">Exemplo:</span> Se a descrição contiver "{keyword || 'uber'}", 
+              a transação será categorizada como "{categories.find(c => c.id === categoryId)?.name || 'Transporte'}".
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} className="text-slate-400">
+              Cancelar
+            </Button>
+            <Button 
+              data-testid="save-rule-button" 
+              type="submit" 
+              className="bg-cyan-600 hover:bg-cyan-700"
+              disabled={!keyword || !categoryId}
+            >
+              Salvar Regra
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
