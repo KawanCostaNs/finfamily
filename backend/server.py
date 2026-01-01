@@ -22,15 +22,35 @@ load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'finamily')]
 
-app = FastAPI()
+app = FastAPI(title="FinFamily API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production-please-make-it-secure')
+SECRET_KEY = os.environ.get('JWT_SECRET', os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production'))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
+
+# CORS Configuration for production
+CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
+if CORS_ORIGINS == '*':
+    cors_origins = ["*"]
+else:
+    cors_origins = [origin.strip() for origin in CORS_ORIGINS.split(',')]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Health check endpoint for Render
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "service": "finamily-api", "version": "1.0.0"}
 
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
