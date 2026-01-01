@@ -282,6 +282,14 @@ export default function Settings() {
             <Tag className="w-4 h-4 mr-2" />
             Categorias
           </TabsTrigger>
+          <TabsTrigger
+            data-testid="rules-tab"
+            value="rules"
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+          >
+            <Wand2 className="w-4 h-4 mr-2" />
+            Regras
+          </TabsTrigger>
         </TabsList>
 
         {/* Family Tab */}
