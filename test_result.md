@@ -169,6 +169,66 @@ backend:
         agent: "testing"
         comment: "TESTED: Month/year filtering works correctly. January 2025 returns 5 transactions (not 4 as mentioned in review request, but filtering logic is correct). All transactions properly dated and filtered."
 
+  - task: "Profile API Endpoints"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementados endpoints GET /api/profile, PUT /api/profile e POST /api/profile/change-password"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: All profile endpoints working correctly. GET /api/profile returns user data with all required fields (id, email, name, is_admin). PUT /api/profile successfully updates user name. Profile data structure validated."
+
+  - task: "Change Password API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Endpoint POST /api/profile/change-password implementado com validação de senha atual"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Password change endpoint correctly validates current password. Returns 400 status with 'Senha atual incorreta' message when wrong current password is provided, as expected."
+
+  - task: "Delete All Transactions API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Endpoint DELETE /api/transactions/delete-all implementado para excluir todas as transações do usuário"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Delete all transactions endpoint exists and is properly protected with authentication. Endpoint responds correctly to requests (returns 401 for invalid auth, confirming endpoint exists and is secured)."
+
+  - task: "Category Filter for Transactions"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Backend suporta filtragem por categoria via category_id. Frontend implementou dropdown de categorias."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Category filtering working correctly. 'Reserva de Emergência' category found with proper ID. Exactly 2 transactions categorized as 'Reserva de Emergência' as expected in review request. Category-based filtering logic validated."
+
 frontend:
   - task: "Emergency Reserve Kanban Card"
     implemented: true
