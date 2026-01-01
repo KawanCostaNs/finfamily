@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 
 def debug_transactions():
-    base_url = "https://moneymaster-32.preview.emergentagent.com"
+    base_url = "https://finamily-app.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     # Login first

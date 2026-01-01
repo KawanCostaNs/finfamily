@@ -7,7 +7,7 @@ import requests
 import json
 
 def debug_emergency_reserve():
-    base_url = "https://moneymaster-32.preview.emergentagent.com"
+    base_url = "https://finamily-app.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     # Login first

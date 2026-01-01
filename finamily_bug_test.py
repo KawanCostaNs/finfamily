@@ -13,7 +13,7 @@ from datetime import datetime
 
 class FinFamilyBugTester:
     def __init__(self):
-        self.base_url = "https://moneymaster-32.preview.emergentagent.com"
+        self.base_url = "https://finamily-app.preview.emergentagent.com"
         self.api_url = f"{self.base_url}/api"
         self.token = None
         self.test_results = []

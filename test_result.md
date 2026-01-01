@@ -456,7 +456,7 @@ agent_communication:
       TESTED WITH CREDENTIALS:
       - Email: super@finamily.com
       - Password: Admin@2025
-      - URL: https://moneymaster-32.preview.emergentagent.com
+      - URL: https://finamily-app.preview.emergentagent.com
       
       ✅ 1. CATEGORY FILTER ON TRANSACTIONS PAGE:
       - Filter dropdown found with data-testid='filter-category'
