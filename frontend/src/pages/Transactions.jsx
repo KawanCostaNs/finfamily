@@ -46,6 +46,7 @@ export default function Transactions() {
   const [filterType, setFilterType] = useState('all');
   const [filterMonth, setFilterMonth] = useState(0); // 0 = todos os meses
   const [filterYear, setFilterYear] = useState(0); // 0 = todos os anos
+  const [filterCategory, setFilterCategory] = useState('all'); // all = todas categorias
   const [editDialog, setEditDialog] = useState({ open: false, data: null });
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkCategoryDialog, setBulkCategoryDialog] = useState(false);
@@ -59,7 +60,7 @@ export default function Transactions() {
 
   useEffect(() => {
     filterTransactions();
-  }, [transactions, searchTerm, filterType, filterMonth, filterYear]);
+  }, [transactions, searchTerm, filterType, filterMonth, filterYear, filterCategory]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -118,6 +119,15 @@ export default function Transactions() {
         const transDate = new Date(t.date);
         return transDate.getFullYear() === filterYear;
       });
+    }
+
+    // Filtro por categoria
+    if (filterCategory !== 'all') {
+      if (filterCategory === 'uncategorized') {
+        filtered = filtered.filter((t) => !t.category_id);
+      } else {
+        filtered = filtered.filter((t) => t.category_id === filterCategory);
+      }
     }
 
     setFilteredTransactions(filtered);
@@ -313,6 +323,24 @@ export default function Transactions() {
                   <SelectItem value="all" className="text-white">Todas</SelectItem>
                   <SelectItem value="receita" className="text-white">Receitas</SelectItem>
                   <SelectItem value="despesa" className="text-white">Despesas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Tag className="w-5 h-5 text-slate-400" />
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger data-testid="filter-category" className="w-[180px] bg-slate-950 border-slate-800 text-white">
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800">
+                  <SelectItem value="all" className="text-white">Todas categorias</SelectItem>
+                  <SelectItem value="uncategorized" className="text-white">Sem categoria</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id} className="text-white">
+                      {cat.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
