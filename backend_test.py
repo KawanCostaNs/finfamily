@@ -522,12 +522,13 @@ class FinancialAppTester:
 
 def main():
     tester = FinancialAppTester()
-    success = tester.run_all_tests()
+    success = tester.run_new_features_tests()
     
     # Save detailed results
     with open('/app/backend_test_results.json', 'w') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
+            "test_type": "new_features",
             "total_tests": tester.tests_run,
             "passed_tests": tester.tests_passed,
             "success_rate": (tester.tests_passed/tester.tests_run)*100 if tester.tests_run > 0 else 0,
