@@ -176,6 +176,72 @@ export default function Settings() {
     }
   };
 
+  const handleSaveRule = async (data) => {
+    try {
+      if (ruleDialog.data) {
+        await axios.put(`${API}/categorization-rules/${ruleDialog.data.id}`, data, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success('Regra atualizada com sucesso');
+      } else {
+        await axios.post(`${API}/categorization-rules`, data, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success('Regra adicionada com sucesso');
+      }
+      fetchData();
+      setRuleDialog({ open: false, data: null });
+    } catch (error) {
+      console.error('Error saving rule:', error);
+      toast.error('Erro ao salvar regra');
+    }
+  };
+
+  const handleDeleteRule = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta regra?')) return;
+
+    try {
+      await axios.delete(`${API}/categorization-rules/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success('Regra excluída com sucesso');
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting rule:', error);
+      toast.error('Erro ao excluir regra');
+    }
+  };
+
+  const handleToggleRule = async (rule) => {
+    try {
+      await axios.put(`${API}/categorization-rules/${rule.id}`, {
+        ...rule,
+        is_active: !rule.is_active,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success(rule.is_active ? 'Regra desativada' : 'Regra ativada');
+      fetchData();
+    } catch (error) {
+      console.error('Error toggling rule:', error);
+      toast.error('Erro ao atualizar regra');
+    }
+  };
+
+  const getCategoryName = (categoryId) => {
+    const category = categories.find(c => c.id === categoryId);
+    return category ? category.name : 'Categoria não encontrada';
+  };
+
+  const getMatchTypeLabel = (matchType) => {
+    switch (matchType) {
+      case 'contains': return 'Contém';
+      case 'starts_with': return 'Começa com';
+      case 'exact': return 'Exato';
+      default: return matchType;
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div>
