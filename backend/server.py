@@ -706,16 +706,6 @@ async def get_monthly_comparison(year: int, user_id: str = Depends(verify_token)
         result.append(MonthlyComparison(month=month_names[month_num-1], income=income, expenses=expenses))
     return result
 
-# Profile endpoints
-
-@api_router.delete("/goals/{goal_id}")
-async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
-    result = await db.goals.delete_one({"id": goal_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    return {"message": "Goal deleted successfully"}
-
-# Profile endpoints
 # ==================== GAMIFICATION MODELS ====================
 
 class Badge(BaseModel):
