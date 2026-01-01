@@ -145,11 +145,14 @@ backend:
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Implementados GET /api/gamification/badges e POST /api/gamification/check-badges. 8 badges disponíveis, 2 já desbloqueados automaticamente."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Badges API working perfectly. Returns exactly 8 badges with all required fields (name, description, icon, criteria, unlocked, unlocked_at). Exactly 2 badges unlocked as expected: 'Poupador Iniciante' and 'Reserva Sólida'. Badge structure validated. Check badges endpoint returns proper response with unlocked list and count matching."
 
   - task: "Family Challenges API"
     implemented: true
