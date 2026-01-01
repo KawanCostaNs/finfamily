@@ -1,14 +1,264 @@
 {
-  "timestamp": "2026-01-01T09:35:15.781802",
-  "test_type": "gamification_features",
-  "total_tests": 24,
-  "passed_tests": 24,
-  "success_rate": 100.0,
+  "timestamp": "2026-01-01T09:59:14.827748",
+  "test_type": "complete_backend_testing",
+  "total_tests": 98,
+  "passed_tests": 97,
+  "success_rate": 98.9795918367347,
   "results": [
     {
       "test": "Login with Test User",
       "success": true,
       "details": "Status: 200"
+    },
+    {
+      "test": "User Registration (New User)",
+      "success": true,
+      "details": "Status: 202"
+    },
+    {
+      "test": "Login with Invalid Credentials",
+      "success": true,
+      "details": "Status: 401"
+    },
+    {
+      "test": "Create Family Member",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Family Members",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Family Member",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Family Member",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Bank",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Banks",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Bank",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Bank",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Category",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Categories",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Category",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Category",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get All Transactions",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Transactions with Month/Year Filter",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Transaction Month/Year Filter",
+      "success": true,
+      "details": "Filtered: 0, Total: 10"
+    },
+    {
+      "test": "Get Members for Transaction Test",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Banks for Transaction Test",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Transactions for Individual Test",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Individual Transaction",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Transaction",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Transaction Update Verification",
+      "success": true,
+      "details": "Description updated correctly"
+    },
+    {
+      "test": "Restore Transaction Description",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Categories for Filter Test",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Find Emergency Reserve Category",
+      "success": true,
+      "details": "Found category with ID: 869ff41e-c198-4a61-8ef8-aa20b0184a11"
+    },
+    {
+      "test": "Get All Transactions",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Emergency Reserve Transactions Count",
+      "success": true,
+      "details": "Found 2 transactions as expected"
+    },
+    {
+      "test": "Get Emergency Reserve",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Emergency Reserve Structure",
+      "success": true,
+      "details": "Total: R$ 2000.0"
+    },
+    {
+      "test": "Emergency Reserve Amount",
+      "success": true,
+      "details": "Correct amount: R$ 2000.0"
+    },
+    {
+      "test": "Dashboard Summary",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Dashboard Summary Structure",
+      "success": true,
+      "details": "All required fields present"
+    },
+    {
+      "test": "Category Chart Data",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Category Chart Structure",
+      "success": true,
+      "details": "Got 0 categories"
+    },
+    {
+      "test": "Monthly Comparison Data",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Monthly Comparison Structure",
+      "success": true,
+      "details": "Got 12 months"
+    },
+    {
+      "test": "Create Goal",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Goals",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Goal",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Add Goal Contribution",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Goal Contribution Verification",
+      "success": true,
+      "details": "Current amount: 250.0"
+    },
+    {
+      "test": "Delete Goal",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Profile Data",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Profile Data Structure",
+      "success": true,
+      "details": "All required fields present"
+    },
+    {
+      "test": "Update Profile Name",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Profile Name Update Verification",
+      "success": true,
+      "details": "Name updated correctly"
+    },
+    {
+      "test": "Restore Original Profile Name",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Change Password with Wrong Current Password",
+      "success": true,
+      "details": "Status: 400"
+    },
+    {
+      "test": "Delete All Transactions Endpoint Exists",
+      "success": true,
+      "details": "Status: 401"
     },
     {
       "test": "Get Health Score",
@@ -98,7 +348,7 @@
     {
       "test": "Get Created Challenge ID",
       "success": true,
-      "details": "Challenge ID: 9eff1d92-9a8d-4d1d-8927-b678b8540a98"
+      "details": "Challenge ID: 23b949bb-7f9b-4698-ae47-bd8eb335f9a0"
     },
     {
       "test": "Update Challenge Progress",
@@ -124,6 +374,126 @@
       "test": "Challenge Deletion Verification",
       "success": true,
       "details": "Test challenge successfully deleted"
+    },
+    {
+      "test": "Get Categories for Rules Test",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Find Alimenta\u00e7\u00e3o Category",
+      "success": true,
+      "details": "Found category with ID: 20c2f9d4-0ffd-49d7-aaae-eae987d292c1"
+    },
+    {
+      "test": "Create Categorization Rule",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Created Rule ID",
+      "success": true,
+      "details": "Rule ID: 29361178-8a2d-45f2-975b-689c68bfc676"
+    },
+    {
+      "test": "Rule Creation Data Verification",
+      "success": true,
+      "details": "Rule created with correct data"
+    },
+    {
+      "test": "Get Categorization Rules",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Rules List Structure",
+      "success": true,
+      "details": "Got 2 rules"
+    },
+    {
+      "test": "Find Created Rule in List",
+      "success": true,
+      "details": "Found rule with keyword: mercado"
+    },
+    {
+      "test": "Find Uber Rule",
+      "success": true,
+      "details": "Found uber rule with ID: c1b103da-16f0-4fb7-8fde-b0217310eb71"
+    },
+    {
+      "test": "Update Categorization Rule",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Rule Update Verification",
+      "success": true,
+      "details": "Rule updated correctly"
+    },
+    {
+      "test": "Delete Categorization Rule",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Verify Rule Deleted",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Rule Deletion Verification",
+      "success": true,
+      "details": "Test rule successfully deleted"
+    },
+    {
+      "test": "Get Categories for Auto-Categorization Test",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Find Transporte Category",
+      "success": true,
+      "details": "Found category with ID: d70a36bb-c0d5-4681-8ef6-790ef5312bab"
+    },
+    {
+      "test": "Create Uber Rule for Auto-Categorization",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Family Members for Import",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Banks for Import",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Import Transactions with Auto-Categorization",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Auto-Categorization on Import",
+      "success": true,
+      "details": "1 transactions auto-categorized"
+    },
+    {
+      "test": "Get Transactions to Verify Auto-Categorization",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Uber Transaction Categorized",
+      "success": false,
+      "details": "Uber transaction not categorized correctly"
+    },
+    {
+      "test": "Cleanup Uber Rule",
+      "success": true,
+      "details": "Status: 200"
     }
   ]
 }
