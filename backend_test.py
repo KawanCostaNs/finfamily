@@ -1583,14 +1583,14 @@ class FinancialAppTester:
 def main():
     tester = FinancialAppTester()
     
-    # Run gamification tests as requested in review
-    success = tester.run_gamification_tests()
+    # Run COMPLETE backend tests as requested in review
+    success = tester.run_complete_backend_tests()
     
     # Save detailed results
     with open('/app/backend_test_results.json', 'w') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
-            "test_type": "gamification_features",
+            "test_type": "complete_backend_testing",
             "total_tests": tester.tests_run,
             "passed_tests": tester.tests_passed,
             "success_rate": (tester.tests_passed/tester.tests_run)*100 if tester.tests_run > 0 else 0,
