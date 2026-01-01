@@ -461,7 +461,7 @@ export default function Settings() {
           {categories.length === 0 && (
             <Card className="solid-card border-slate-800">
               <CardContent className="py-12 text-center text-slate-500">
-                Nenhuma categoria cadastrada. Clique em "Adicionar Categoria" para começar.
+                Nenhuma categoria cadastrada. Clique em &quot;Adicionar Categoria&quot; para começar.
               </CardContent>
             </Card>
           )}
