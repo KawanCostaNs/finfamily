@@ -552,9 +552,9 @@ async def import_transactions(file: UploadFile = File(...), member_id: str = For
         else:
             raise HTTPException(status_code=400, detail="Unsupported file format")
         
+        auto_categorized = 0
         if transactions:
             docs = []
-            auto_categorized = 0
             for trans in transactions:
                 doc = trans.model_dump()
                 doc['date'] = doc['date'].isoformat()
