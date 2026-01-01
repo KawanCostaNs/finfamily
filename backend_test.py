@@ -479,6 +479,295 @@ class FinancialAppTester:
         
         return success
 
+    def test_gamification_health_score(self):
+        """Test Health Score API"""
+        success, response = self.run_test(
+            "Get Health Score",
+            "GET",
+            "gamification/health-score",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify health score structure
+        expected_fields = ['total_score', 'reserve_score', 'expense_ratio_score', 'consistency_score', 'goals_score', 'level', 'tips']
+        missing_fields = [field for field in expected_fields if field not in response]
+        
+        if missing_fields:
+            self.log_test("Health Score Structure", False, f"Missing fields: {missing_fields}")
+            return False
+        else:
+            self.log_test("Health Score Structure", True, "All required fields present")
+        
+        # Verify score ranges
+        total_score = response.get('total_score', -1)
+        if 0 <= total_score <= 100:
+            self.log_test("Health Score Range", True, f"Total score: {total_score}")
+        else:
+            self.log_test("Health Score Range", False, f"Total score {total_score} not in range 0-100")
+            return False
+        
+        # Verify level is valid
+        valid_levels = ["Crítico", "Atenção", "Bom", "Excelente"]
+        level = response.get('level', '')
+        if level in valid_levels:
+            self.log_test("Health Score Level", True, f"Level: {level}")
+        else:
+            self.log_test("Health Score Level", False, f"Invalid level: {level}")
+            return False
+        
+        # Verify tips is a list
+        tips = response.get('tips', [])
+        if isinstance(tips, list):
+            self.log_test("Health Score Tips", True, f"Tips count: {len(tips)}")
+        else:
+            self.log_test("Health Score Tips", False, "Tips is not a list")
+            return False
+        
+        return True
+
+    def test_gamification_badges(self):
+        """Test Badges API"""
+        success, response = self.run_test(
+            "Get Badges",
+            "GET",
+            "gamification/badges",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify badges structure
+        if not isinstance(response, list):
+            self.log_test("Badges Structure", False, "Response is not a list")
+            return False
+        
+        if len(response) != 8:
+            self.log_test("Badges Count", False, f"Expected 8 badges, got {len(response)}")
+            return False
+        else:
+            self.log_test("Badges Count", True, "8 badges returned")
+        
+        # Check each badge structure
+        expected_badge_fields = ['name', 'description', 'icon', 'criteria', 'unlocked', 'unlocked_at']
+        for i, badge in enumerate(response):
+            missing_fields = [field for field in expected_badge_fields if field not in badge]
+            if missing_fields:
+                self.log_test(f"Badge {i+1} Structure", False, f"Missing fields: {missing_fields}")
+                return False
+        
+        self.log_test("All Badges Structure", True, "All badges have required fields")
+        
+        # Count unlocked badges
+        unlocked_badges = [badge for badge in response if badge.get('unlocked', False)]
+        unlocked_count = len(unlocked_badges)
+        
+        # According to review request, at least 2 badges should be unlocked
+        if unlocked_count >= 2:
+            self.log_test("Unlocked Badges Count", True, f"{unlocked_count} badges unlocked")
+            
+            # Check for specific badges mentioned in review request
+            unlocked_names = [badge['name'] for badge in unlocked_badges]
+            expected_unlocked = ["Poupador Iniciante", "Reserva Sólida"]
+            
+            found_expected = [name for name in expected_unlocked if name in unlocked_names]
+            if len(found_expected) >= 2:
+                self.log_test("Expected Badges Unlocked", True, f"Found: {found_expected}")
+            else:
+                self.log_test("Expected Badges Unlocked", False, f"Expected {expected_unlocked}, found: {found_expected}")
+                return False
+        else:
+            self.log_test("Unlocked Badges Count", False, f"Expected at least 2 unlocked badges, got {unlocked_count}")
+            return False
+        
+        return True
+
+    def test_gamification_check_badges(self):
+        """Test Check Badges API"""
+        success, response = self.run_test(
+            "Check and Unlock Badges",
+            "POST",
+            "gamification/check-badges",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify response structure
+        expected_fields = ['unlocked', 'count']
+        missing_fields = [field for field in expected_fields if field not in response]
+        
+        if missing_fields:
+            self.log_test("Check Badges Response Structure", False, f"Missing fields: {missing_fields}")
+            return False
+        else:
+            self.log_test("Check Badges Response Structure", True, "All required fields present")
+        
+        # Verify unlocked is a list
+        unlocked = response.get('unlocked', [])
+        if isinstance(unlocked, list):
+            self.log_test("Check Badges Unlocked List", True, f"Unlocked badges: {len(unlocked)}")
+        else:
+            self.log_test("Check Badges Unlocked List", False, "Unlocked is not a list")
+            return False
+        
+        # Verify count matches unlocked list length
+        count = response.get('count', -1)
+        if count == len(unlocked):
+            self.log_test("Check Badges Count Match", True, f"Count matches unlocked list: {count}")
+        else:
+            self.log_test("Check Badges Count Match", False, f"Count {count} doesn't match unlocked list length {len(unlocked)}")
+            return False
+        
+        return True
+
+    def test_gamification_challenges_crud(self):
+        """Test Family Challenges CRUD operations"""
+        # First, get existing challenges
+        success, existing_challenges = self.run_test(
+            "Get Existing Challenges",
+            "GET",
+            "gamification/challenges",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Check if "Economizar na Energia" challenge exists
+        energia_challenge = None
+        for challenge in existing_challenges:
+            if challenge.get('name') == 'Economizar na Energia':
+                energia_challenge = challenge
+                break
+        
+        if energia_challenge:
+            self.log_test("Find Energia Challenge", True, f"Found challenge with ID: {energia_challenge['id']}")
+        else:
+            self.log_test("Find Energia Challenge", False, "Economizar na Energia challenge not found")
+        
+        # Create a new test challenge
+        test_challenge_data = {
+            "name": "Test Challenge",
+            "description": "Test challenge for automated testing",
+            "target_amount": 100.0,
+            "reward": "Test reward"
+        }
+        
+        success, create_response = self.run_test(
+            "Create Test Challenge",
+            "POST",
+            "gamification/challenges",
+            200,
+            data=test_challenge_data
+        )
+        
+        if not success:
+            return False
+            
+        test_challenge_id = create_response.get('id')
+        if not test_challenge_id:
+            self.log_test("Get Created Challenge ID", False, "No ID returned from create")
+            return False
+        else:
+            self.log_test("Get Created Challenge ID", True, f"Challenge ID: {test_challenge_id}")
+        
+        # Update challenge progress
+        success, progress_response = self.run_test(
+            "Update Challenge Progress",
+            "POST",
+            f"gamification/challenges/{test_challenge_id}/progress?amount=50",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify progress was updated
+        current_amount = progress_response.get('current_amount', 0)
+        if current_amount == 50:
+            self.log_test("Challenge Progress Update", True, f"Progress updated to: {current_amount}")
+        else:
+            self.log_test("Challenge Progress Update", False, f"Expected 50, got {current_amount}")
+            return False
+        
+        # Delete the test challenge
+        success, delete_response = self.run_test(
+            "Delete Test Challenge",
+            "DELETE",
+            f"gamification/challenges/{test_challenge_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Verify challenge was deleted by trying to get it
+        success, get_after_delete = self.run_test(
+            "Verify Challenge Deleted",
+            "GET",
+            "gamification/challenges",
+            200
+        )
+        
+        if success:
+            # Check that our test challenge is no longer in the list
+            remaining_challenges = get_after_delete
+            test_challenge_still_exists = any(c.get('id') == test_challenge_id for c in remaining_challenges)
+            
+            if not test_challenge_still_exists:
+                self.log_test("Challenge Deletion Verification", True, "Test challenge successfully deleted")
+            else:
+                self.log_test("Challenge Deletion Verification", False, "Test challenge still exists after deletion")
+                return False
+        
+        return True
+
+    def run_gamification_tests(self):
+        """Run tests for gamification features specifically"""
+        print("🎮 Starting FinFamily Gamification Backend Tests")
+        print("=" * 50)
+        
+        # Test authentication with existing user
+        if not self.test_auth_login_existing_user():
+            print("❌ Login with test user failed, stopping tests")
+            return False
+            
+        print(f"✅ Authenticated as: {self.user_data.get('name')} ({self.user_data.get('email')})")
+        print(f"✅ Admin status: {self.user_data.get('is_admin')}")
+        print()
+        
+        # Test Health Score API
+        print("💚 Testing Health Score API...")
+        self.test_gamification_health_score()
+        print()
+        
+        # Test Badges API
+        print("🏆 Testing Badges API...")
+        self.test_gamification_badges()
+        print()
+        
+        # Test Check Badges API
+        print("🔍 Testing Check Badges API...")
+        self.test_gamification_check_badges()
+        print()
+        
+        # Test Family Challenges CRUD
+        print("👨‍👩‍👧‍👦 Testing Family Challenges CRUD...")
+        self.test_gamification_challenges_crud()
+        print()
+        
+        # Print summary
+        print("=" * 50)
+        print(f"📊 Gamification Tests Summary: {self.tests_passed}/{self.tests_run} passed")
+        print(f"✅ Success Rate: {(self.tests_passed/self.tests_run)*100:.1f}%")
+        
+        return self.tests_passed == self.tests_run
+
     def run_new_features_tests(self):
         """Run tests for new features specifically mentioned in review request"""
         print("🚀 Starting FinFamily New Features Backend Tests")
