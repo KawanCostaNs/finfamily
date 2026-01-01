@@ -7,6 +7,7 @@ import Transactions from './pages/Transactions';
 import Goals from './pages/Goals';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
+import Profile from './pages/Profile';
 import Layout from './components/Layout';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
@@ -46,6 +47,7 @@ function App() {
             <Route path="goals" element={<Goals />} />
             <Route path="settings" element={<Settings />} />
             <Route path="admin" element={<Admin />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
         </Routes>
       </BrowserRouter>

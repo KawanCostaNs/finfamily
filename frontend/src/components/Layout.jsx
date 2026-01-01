@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Upload, List, Target, Settings, LogOut, Menu, X, Shield } from 'lucide-react';
+import { LayoutDashboard, Upload, List, Target, Settings, LogOut, Menu, X, Shield, UserCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 
@@ -30,6 +30,7 @@ export default function Layout() {
     { path: '/transactions', label: 'Transações', icon: List },
     { path: '/goals', label: 'Metas', icon: Target },
     { path: '/settings', label: 'Configurações', icon: Settings },
+    { path: '/profile', label: 'Perfil', icon: UserCircle },
   ];
 
   // Adiciona item de Admin se o usuário for admin
