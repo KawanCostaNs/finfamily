@@ -706,77 +706,7 @@ async def get_monthly_comparison(year: int, user_id: str = Depends(verify_token)
         result.append(MonthlyComparison(month=month_names[month_num-1], income=income, expenses=expenses))
     return result
 
-# Goals endpoints
-class Goal(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    description: Optional[str] = None
-    target_amount: float
-    current_amount: float = 0.0
-    deadline: Optional[datetime] = None
-    image_url: Optional[str] = None
-    monthly_contribution: float = 0.0
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class GoalCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    target_amount: float
-    deadline: Optional[datetime] = None
-    image_url: Optional[str] = None
-    monthly_contribution: float = 0.0
-
-class GoalContribution(BaseModel):
-    amount: float
-
-@api_router.post("/goals", response_model=Goal)
-async def create_goal(goal: GoalCreate, user_id: str = Depends(verify_token)):
-    goal_obj = Goal(**goal.model_dump())
-    doc = goal_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    if doc.get('deadline'):
-        doc['deadline'] = doc['deadline'].isoformat()
-    doc['user_id'] = user_id
-    await db.goals.insert_one(doc)
-    return goal_obj
-
-@api_router.get("/goals", response_model=List[Goal])
-async def get_goals(user_id: str = Depends(verify_token)):
-    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for goal in goals:
-        if isinstance(goal['created_at'], str):
-            goal['created_at'] = datetime.fromisoformat(goal['created_at'])
-        if goal.get('deadline') and isinstance(goal['deadline'], str):
-            goal['deadline'] = datetime.fromisoformat(goal['deadline'])
-    return goals
-
-@api_router.put("/goals/{goal_id}", response_model=Goal)
-async def update_goal(goal_id: str, goal: GoalCreate, user_id: str = Depends(verify_token)):
-    update_data = goal.model_dump()
-    if update_data.get('deadline'):
-        update_data['deadline'] = update_data['deadline'].isoformat()
-    result = await db.goals.update_one({"id": goal_id, "user_id": user_id}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    updated = await db.goals.find_one({"id": goal_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    if updated.get('deadline') and isinstance(updated['deadline'], str):
-        updated['deadline'] = datetime.fromisoformat(updated['deadline'])
-    return Goal(**updated)
-
-@api_router.post("/goals/{goal_id}/contribute")
-async def add_goal_contribution(goal_id: str, contribution: GoalContribution, user_id: str = Depends(verify_token)):
-    result = await db.goals.update_one({"id": goal_id, "user_id": user_id}, {"$inc": {"current_amount": contribution.amount}})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    updated = await db.goals.find_one({"id": goal_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    if updated.get('deadline') and isinstance(updated['deadline'], str):
-        updated['deadline'] = datetime.fromisoformat(updated['deadline'])
-    return Goal(**updated)
+# Profile endpoints
 
 @api_router.delete("/goals/{goal_id}")
 async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
