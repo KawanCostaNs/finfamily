@@ -919,6 +919,307 @@ async def delete_all_transactions(user_id: str = Depends(verify_token)):
     result = await db.transactions.delete_many({"user_id": user_id})
     return {"message": f"Todas as {result.deleted_count} transações foram excluídas com sucesso", "count": result.deleted_count}
 
+# ==================== GAMIFICATION ENDPOINTS ====================
+
+# Badge definitions - these are the available badges
+BADGE_DEFINITIONS = [
+    {"name": "Mês sem Juros", "description": "Completou um mês sem pagar juros", "icon": "🎉", "criteria": "no_interest_month"},
+    {"name": "Poupador Iniciante", "description": "Fez o primeiro depósito na reserva de emergência", "icon": "🌱", "criteria": "first_reserve_deposit"},
+    {"name": "Meta de Reserva Batida", "description": "Atingiu 100% de uma meta financeira", "icon": "🏆", "criteria": "goal_completed"},
+    {"name": "Constância é Tudo", "description": "3 meses consecutivos com aportes na poupança", "icon": "📈", "criteria": "consecutive_savings"},
+    {"name": "Família Unida", "description": "Todos os membros contribuíram no mês", "icon": "👨‍👩‍👧‍👦", "criteria": "all_members_contributed"},
+    {"name": "Economizador Master", "description": "Taxa de poupança acima de 30%", "icon": "💎", "criteria": "high_savings_rate"},
+    {"name": "Organizador Financeiro", "description": "Categorizou todas as transações do mês", "icon": "📊", "criteria": "all_categorized"},
+    {"name": "Reserva Sólida", "description": "Reserva de emergência >= 6 meses de despesas", "icon": "🛡️", "criteria": "solid_reserve"},
+]
+
+@api_router.get("/gamification/badges")
+async def get_user_badges(user_id: str = Depends(verify_token)):
+    """Get all badges and their unlock status for the user"""
+    user_badges = await db.badges.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    unlocked_badges = {b['criteria']: b for b in user_badges}
+    
+    result = []
+    for badge_def in BADGE_DEFINITIONS:
+        unlocked = unlocked_badges.get(badge_def['criteria'])
+        result.append({
+            **badge_def,
+            "unlocked": unlocked is not None,
+            "unlocked_at": unlocked.get('unlocked_at') if unlocked else None
+        })
+    
+    return result
+
+@api_router.post("/gamification/check-badges")
+async def check_and_unlock_badges(user_id: str = Depends(verify_token)):
+    """Check and automatically unlock badges based on user activity"""
+    unlocked = []
+    
+    # Get user data
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    members = await db.family_members.find({"user_id": user_id}, {"_id": 0}).to_list(100)
+    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    
+    reserve_category = next((c for c in categories if c['name'] == 'Reserva de Emergência'), None)
+    reserve_category_id = reserve_category['id'] if reserve_category else None
+    
+    for trans in transactions:
+        if isinstance(trans.get('date'), str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    
+    current_month = datetime.now(timezone.utc).month
+    current_year = datetime.now(timezone.utc).year
+    
+    # Check: First reserve deposit
+    if reserve_category_id:
+        reserve_transactions = [t for t in transactions if t.get('category_id') == reserve_category_id or t.get('is_reserve_deposit')]
+        if reserve_transactions:
+            existing = await db.badges.find_one({"user_id": user_id, "criteria": "first_reserve_deposit"})
+            if not existing:
+                badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "first_reserve_deposit", "unlocked_at": datetime.now(timezone.utc).isoformat()}
+                await db.badges.insert_one(badge)
+                unlocked.append({"name": "Poupador Iniciante", "icon": "🌱"})
+    
+    # Check: Goal completed
+    completed_goals = [g for g in goals if g.get('current_amount', 0) >= g.get('target_amount', float('inf'))]
+    if completed_goals:
+        existing = await db.badges.find_one({"user_id": user_id, "criteria": "goal_completed"})
+        if not existing:
+            badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "goal_completed", "unlocked_at": datetime.now(timezone.utc).isoformat()}
+            await db.badges.insert_one(badge)
+            unlocked.append({"name": "Meta de Reserva Batida", "icon": "🏆"})
+    
+    # Check: High savings rate (>30%)
+    current_month_trans = [t for t in transactions if t['date'].month == current_month and t['date'].year == current_year]
+    income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
+    expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
+    if income > 0:
+        savings_rate = ((income - expenses) / income) * 100
+        if savings_rate >= 30:
+            existing = await db.badges.find_one({"user_id": user_id, "criteria": "high_savings_rate"})
+            if not existing:
+                badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "high_savings_rate", "unlocked_at": datetime.now(timezone.utc).isoformat()}
+                await db.badges.insert_one(badge)
+                unlocked.append({"name": "Economizador Master", "icon": "💎"})
+    
+    # Check: All transactions categorized
+    uncategorized = [t for t in current_month_trans if not t.get('category_id')]
+    if current_month_trans and not uncategorized:
+        existing = await db.badges.find_one({"user_id": user_id, "criteria": "all_categorized"})
+        if not existing:
+            badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "all_categorized", "unlocked_at": datetime.now(timezone.utc).isoformat()}
+            await db.badges.insert_one(badge)
+            unlocked.append({"name": "Organizador Financeiro", "icon": "📊"})
+    
+    # Check: Solid reserve (6+ months expenses)
+    avg_monthly_expenses = expenses if expenses > 0 else 1
+    reserve_total = sum(t['amount'] for t in transactions if t.get('is_reserve_deposit') or (reserve_category_id and t.get('category_id') == reserve_category_id and t['type'] == 'receita'))
+    if reserve_total >= avg_monthly_expenses * 6:
+        existing = await db.badges.find_one({"user_id": user_id, "criteria": "solid_reserve"})
+        if not existing:
+            badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "solid_reserve", "unlocked_at": datetime.now(timezone.utc).isoformat()}
+            await db.badges.insert_one(badge)
+            unlocked.append({"name": "Reserva Sólida", "icon": "🛡️"})
+    
+    # Check: All members contributed
+    if members:
+        member_ids = {m['id'] for m in members}
+        contributing_members = {t['member_id'] for t in current_month_trans if t.get('member_id')}
+        if member_ids and member_ids == contributing_members:
+            existing = await db.badges.find_one({"user_id": user_id, "criteria": "all_members_contributed"})
+            if not existing:
+                badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "all_members_contributed", "unlocked_at": datetime.now(timezone.utc).isoformat()}
+                await db.badges.insert_one(badge)
+                unlocked.append({"name": "Família Unida", "icon": "👨‍👩‍👧‍👦"})
+    
+    return {"unlocked": unlocked, "count": len(unlocked)}
+
+# Family Challenges
+@api_router.post("/gamification/challenges")
+async def create_challenge(challenge: FamilyChallengeCreate, user_id: str = Depends(verify_token)):
+    challenge_obj = FamilyChallenge(**challenge.model_dump())
+    doc = challenge_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    if doc.get('deadline'):
+        doc['deadline'] = doc['deadline'].isoformat()
+    doc['user_id'] = user_id
+    await db.challenges.insert_one(doc)
+    return challenge_obj
+
+@api_router.get("/gamification/challenges")
+async def get_challenges(user_id: str = Depends(verify_token)):
+    challenges = await db.challenges.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for challenge in challenges:
+        if isinstance(challenge.get('created_at'), str):
+            challenge['created_at'] = datetime.fromisoformat(challenge['created_at'])
+        if challenge.get('deadline') and isinstance(challenge['deadline'], str):
+            challenge['deadline'] = datetime.fromisoformat(challenge['deadline'])
+    return challenges
+
+@api_router.put("/gamification/challenges/{challenge_id}")
+async def update_challenge(challenge_id: str, challenge: FamilyChallengeCreate, user_id: str = Depends(verify_token)):
+    update_data = challenge.model_dump()
+    if update_data.get('deadline'):
+        update_data['deadline'] = update_data['deadline'].isoformat()
+    result = await db.challenges.update_one({"id": challenge_id, "user_id": user_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    updated = await db.challenges.find_one({"id": challenge_id}, {"_id": 0})
+    return updated
+
+@api_router.post("/gamification/challenges/{challenge_id}/progress")
+async def update_challenge_progress(challenge_id: str, amount: float, user_id: str = Depends(verify_token)):
+    """Update the current_amount of a challenge"""
+    challenge = await db.challenges.find_one({"id": challenge_id, "user_id": user_id}, {"_id": 0})
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    
+    new_amount = challenge.get('current_amount', 0) + amount
+    is_completed = new_amount >= challenge.get('target_amount', float('inf'))
+    
+    update_data = {"current_amount": new_amount}
+    if is_completed and not challenge.get('is_completed'):
+        update_data['is_completed'] = True
+        update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.challenges.update_one({"id": challenge_id, "user_id": user_id}, {"$set": update_data})
+    
+    updated = await db.challenges.find_one({"id": challenge_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/gamification/challenges/{challenge_id}")
+async def delete_challenge(challenge_id: str, user_id: str = Depends(verify_token)):
+    result = await db.challenges.delete_one({"id": challenge_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    return {"message": "Challenge deleted successfully"}
+
+# Health Score
+@api_router.get("/gamification/health-score", response_model=HealthScore)
+async def get_health_score(user_id: str = Depends(verify_token)):
+    """Calculate the financial health score (0-100) based on multiple criteria"""
+    
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    
+    for trans in transactions:
+        if isinstance(trans.get('date'), str):
+            trans['date'] = datetime.fromisoformat(trans['date'])
+    
+    current_month = datetime.now(timezone.utc).month
+    current_year = datetime.now(timezone.utc).year
+    
+    # Calculate current month's income and expenses
+    current_month_trans = [t for t in transactions if t['date'].month == current_month and t['date'].year == current_year]
+    month_income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
+    month_expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
+    
+    # Calculate reserve
+    reserve_category = next((c for c in categories if c['name'] == 'Reserva de Emergência'), None)
+    reserve_category_id = reserve_category['id'] if reserve_category else None
+    reserve_total = 0
+    for trans in transactions:
+        if trans.get('is_reserve_deposit'):
+            reserve_total += trans['amount']
+        elif trans.get('is_reserve_withdrawal'):
+            reserve_total -= trans['amount']
+        elif reserve_category_id and trans.get('category_id') == reserve_category_id:
+            if trans.get('type') == 'receita':
+                reserve_total += trans['amount']
+            else:
+                reserve_total -= trans['amount']
+    
+    tips = []
+    
+    # 1. Reserve Score (0-30) - based on months of expenses covered
+    months_covered = reserve_total / month_expenses if month_expenses > 0 else 0
+    if months_covered >= 6:
+        reserve_score = 30
+    elif months_covered >= 3:
+        reserve_score = 20
+    elif months_covered >= 1:
+        reserve_score = 10
+    else:
+        reserve_score = 0
+        tips.append("💡 Construa uma reserva de emergência de pelo menos 3-6 meses de despesas")
+    
+    # 2. Expense Ratio Score (0-30) - expenses should be < 70% of income
+    if month_income > 0:
+        expense_ratio = month_expenses / month_income
+        if expense_ratio <= 0.5:
+            expense_ratio_score = 30
+        elif expense_ratio <= 0.7:
+            expense_ratio_score = 20
+        elif expense_ratio <= 0.9:
+            expense_ratio_score = 10
+        else:
+            expense_ratio_score = 0
+            tips.append("💡 Suas despesas estão muito altas. Tente reduzir para menos de 70% da renda")
+    else:
+        expense_ratio_score = 0
+        tips.append("💡 Registre suas receitas para uma análise mais precisa")
+    
+    # 3. Consistency Score (0-20) - based on savings pattern in last 3 months
+    consistency_score = 0
+    months_with_savings = 0
+    for i in range(3):
+        check_month = current_month - i if current_month - i > 0 else 12 + (current_month - i)
+        check_year = current_year if current_month - i > 0 else current_year - 1
+        month_trans = [t for t in transactions if t['date'].month == check_month and t['date'].year == check_year]
+        m_income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
+        m_expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
+        if m_income > m_expenses:
+            months_with_savings += 1
+    
+    if months_with_savings == 3:
+        consistency_score = 20
+    elif months_with_savings == 2:
+        consistency_score = 13
+    elif months_with_savings == 1:
+        consistency_score = 7
+    else:
+        tips.append("💡 Tente economizar algo todo mês, mesmo que seja pouco")
+    
+    # 4. Goals Score (0-20) - based on progress towards goals
+    if goals:
+        total_progress = 0
+        for goal in goals:
+            progress = min(goal.get('current_amount', 0) / goal.get('target_amount', 1), 1.0)
+            total_progress += progress
+        avg_progress = total_progress / len(goals)
+        goals_score = int(avg_progress * 20)
+        if avg_progress < 0.5:
+            tips.append("💡 Continue investindo nas suas metas. Pequenos aportes fazem diferença!")
+    else:
+        goals_score = 0
+        tips.append("💡 Defina metas financeiras para acompanhar seu progresso")
+    
+    # Calculate total score
+    total_score = reserve_score + expense_ratio_score + consistency_score + goals_score
+    
+    # Determine level
+    if total_score >= 80:
+        level = "Excelente"
+    elif total_score >= 60:
+        level = "Bom"
+    elif total_score >= 40:
+        level = "Atenção"
+    else:
+        level = "Crítico"
+    
+    return HealthScore(
+        total_score=total_score,
+        reserve_score=reserve_score,
+        expense_ratio_score=expense_ratio_score,
+        consistency_score=consistency_score,
+        goals_score=goals_score,
+        level=level,
+        tips=tips[:3]  # Return top 3 tips
+    )
+
+# ==================== END GAMIFICATION ENDPOINTS ====================
 
 app.include_router(api_router)
 
