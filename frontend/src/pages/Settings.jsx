@@ -591,6 +591,15 @@ export default function Settings() {
         onClose={() => setCategoryDialog({ open: false, data: null })}
         onSave={handleSaveCategory}
       />
+
+      {/* Rule Dialog */}
+      <RuleDialog
+        open={ruleDialog.open}
+        data={ruleDialog.data}
+        categories={categories}
+        onClose={() => setRuleDialog({ open: false, data: null })}
+        onSave={handleSaveRule}
+      />
     </div>
   );
 }
