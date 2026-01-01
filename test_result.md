@@ -124,6 +124,42 @@ backend:
         agent: "testing"
         comment: "TESTED: API returns exactly R$ 2.000,00 as expected. Two 'Depósito Reserva' transactions (R$ 1.000 each) properly categorized as 'Reserva de Emergência' and correctly calculated."
 
+  - task: "Health Score API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementado endpoint GET /api/gamification/health-score que calcula score 0-100 baseado em reserva, despesas, constância e metas. Testado via curl."
+
+  - task: "Badges API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementados GET /api/gamification/badges e POST /api/gamification/check-badges. 8 badges disponíveis, 2 já desbloqueados automaticamente."
+
+  - task: "Family Challenges API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementados endpoints CRUD para desafios em família. Testado criação de desafio 'Economizar na Energia' via curl."
+
   - task: "Dashboard Summary API"
     implemented: true
     working: true
