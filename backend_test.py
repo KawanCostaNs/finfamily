@@ -1070,6 +1070,475 @@ class FinancialAppTester:
         
         return self.tests_passed == self.tests_run
 
+    def test_goals_crud(self):
+        """Test Goals CRUD operations"""
+        # Create goal
+        goal_data = {
+            "name": "Test Goal",
+            "description": "Test goal for automated testing",
+            "target_amount": 1000.0,
+            "monthly_contribution": 100.0
+        }
+        success, response = self.run_test(
+            "Create Goal",
+            "POST",
+            "goals",
+            200,
+            data=goal_data
+        )
+        
+        if not success:
+            return False
+            
+        goal_id = response.get('id')
+        
+        # Get goals
+        success, response = self.run_test(
+            "Get Goals",
+            "GET",
+            "goals",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Update goal
+        update_data = {
+            "name": "Updated Test Goal",
+            "description": "Updated description",
+            "target_amount": 1500.0,
+            "monthly_contribution": 150.0
+        }
+        success, response = self.run_test(
+            "Update Goal",
+            "PUT",
+            f"goals/{goal_id}",
+            200,
+            data=update_data
+        )
+        
+        if not success:
+            return False
+            
+        # Test goal contribution
+        contribution_data = {"amount": 250.0}
+        success, response = self.run_test(
+            "Add Goal Contribution",
+            "POST",
+            f"goals/{goal_id}/contribute",
+            200,
+            data=contribution_data
+        )
+        
+        if not success:
+            return False
+            
+        # Verify contribution was added
+        if response.get('current_amount') == 250.0:
+            self.log_test("Goal Contribution Verification", True, f"Current amount: {response.get('current_amount')}")
+        else:
+            self.log_test("Goal Contribution Verification", False, f"Expected 250.0, got {response.get('current_amount')}")
+            return False
+        
+        # Delete goal
+        success, response = self.run_test(
+            "Delete Goal",
+            "DELETE",
+            f"goals/{goal_id}",
+            200
+        )
+        
+        return success
+
+    def test_transactions_crud_and_filters(self):
+        """Test transaction CRUD operations and filtering"""
+        # Get existing transactions for filtering tests
+        success, all_transactions = self.run_test(
+            "Get All Transactions",
+            "GET",
+            "transactions",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Test month/year filtering
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        success, filtered_transactions = self.run_test(
+            "Get Transactions with Month/Year Filter",
+            "GET",
+            f"transactions?month={current_month}&year={current_year}",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify filtering worked (should be <= all transactions)
+        if len(filtered_transactions) <= len(all_transactions):
+            self.log_test("Transaction Month/Year Filter", True, f"Filtered: {len(filtered_transactions)}, Total: {len(all_transactions)}")
+        else:
+            self.log_test("Transaction Month/Year Filter", False, f"Filtered count {len(filtered_transactions)} > total {len(all_transactions)}")
+            return False
+        
+        # Test bulk categorization if we have transactions and categories
+        if filtered_transactions:
+            # Get categories
+            success, categories = self.run_test(
+                "Get Categories for Bulk Categorization",
+                "GET",
+                "categories",
+                200
+            )
+            
+            if success and categories:
+                # Use first category and first transaction
+                category_id = categories[0]['id']
+                transaction_id = filtered_transactions[0]['id']
+                
+                bulk_data = {
+                    "transaction_ids": [transaction_id],
+                    "category_id": category_id
+                }
+                
+                success, response = self.run_test(
+                    "Bulk Categorize Transactions",
+                    "POST",
+                    "transactions/bulk-categorize",
+                    200,
+                    data=bulk_data
+                )
+                
+                if success:
+                    count = response.get('count', 0)
+                    if count == 1:
+                        self.log_test("Bulk Categorization Count", True, f"Categorized {count} transaction")
+                    else:
+                        self.log_test("Bulk Categorization Count", False, f"Expected 1, got {count}")
+                        return False
+        
+        return True
+
+    def test_emergency_reserve_api(self):
+        """Test Emergency Reserve API specifically"""
+        success, response = self.run_test(
+            "Get Emergency Reserve",
+            "GET",
+            "dashboard/emergency-reserve",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify response structure
+        if 'total' not in response:
+            self.log_test("Emergency Reserve Structure", False, "Missing 'total' field")
+            return False
+        else:
+            self.log_test("Emergency Reserve Structure", True, f"Total: R$ {response['total']}")
+        
+        # According to review request, should be R$ 2.000,00
+        total = response.get('total', 0)
+        if total == 2000.0:
+            self.log_test("Emergency Reserve Amount", True, f"Correct amount: R$ {total}")
+        else:
+            self.log_test("Emergency Reserve Amount", False, f"Expected R$ 2000.0, got R$ {total}")
+        
+        return True
+
+    def test_complete_dashboard_apis(self):
+        """Test all dashboard APIs comprehensively"""
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        # Test emergency reserve
+        if not self.test_emergency_reserve_api():
+            return False
+        
+        # Test dashboard summary
+        success, response = self.run_test(
+            "Dashboard Summary",
+            "GET",
+            f"dashboard/summary?month={current_month}&year={current_year}",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify summary structure
+        expected_fields = ['previous_balance', 'month_income', 'month_expenses', 'final_balance']
+        missing_fields = [field for field in expected_fields if field not in response]
+        
+        if missing_fields:
+            self.log_test("Dashboard Summary Structure", False, f"Missing fields: {missing_fields}")
+            return False
+        else:
+            self.log_test("Dashboard Summary Structure", True, "All required fields present")
+        
+        # Test category chart
+        success, response = self.run_test(
+            "Category Chart Data",
+            "GET",
+            f"dashboard/category-chart?month={current_month}&year={current_year}",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify it's a list
+        if isinstance(response, list):
+            self.log_test("Category Chart Structure", True, f"Got {len(response)} categories")
+        else:
+            self.log_test("Category Chart Structure", False, "Response is not a list")
+            return False
+        
+        # Test monthly comparison
+        success, response = self.run_test(
+            "Monthly Comparison Data",
+            "GET",
+            f"dashboard/monthly-comparison?year={current_year}",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify it's a list with 12 months
+        if isinstance(response, list) and len(response) == 12:
+            self.log_test("Monthly Comparison Structure", True, f"Got {len(response)} months")
+        else:
+            self.log_test("Monthly Comparison Structure", False, f"Expected 12 months, got {len(response) if isinstance(response, list) else 'not a list'}")
+            return False
+        
+        return True
+
+    def test_auth_register_new_user(self):
+        """Test user registration with new user"""
+        test_email = f"test_{uuid.uuid4().hex[:8]}@finamily.com"
+        test_data = {
+            "email": test_email,
+            "password": "TestPass123!",
+            "name": "Test User Registration"
+        }
+        
+        # Since first user is admin, this should return 202 (waiting for approval)
+        success, response = self.run_test(
+            "User Registration (New User)",
+            "POST",
+            "auth/register",
+            202,  # Expecting 202 for non-first user
+            data=test_data
+        )
+        
+        return success
+
+    def test_invalid_login(self):
+        """Test login with invalid credentials"""
+        invalid_data = {
+            "email": "invalid@example.com",
+            "password": "wrongpassword"
+        }
+        
+        success, response = self.run_test(
+            "Login with Invalid Credentials",
+            "POST",
+            "auth/login",
+            401,  # Should fail with 401
+            data=invalid_data
+        )
+        
+        return success
+
+    def test_transaction_individual_operations(self):
+        """Test individual transaction operations (create, update, delete)"""
+        # Get family members and banks first
+        success, members = self.run_test("Get Members for Transaction Test", "GET", "family", 200)
+        if not success or not members:
+            self.log_test("Get Members for Transaction Test", False, "No family members found")
+            return False
+            
+        success, banks = self.run_test("Get Banks for Transaction Test", "GET", "banks", 200)
+        if not success or not banks:
+            self.log_test("Get Banks for Transaction Test", False, "No banks found")
+            return False
+        
+        # Create a test transaction
+        transaction_data = {
+            "date": datetime.now().isoformat(),
+            "description": "Test Transaction for CRUD",
+            "amount": 100.0,
+            "type": "despesa",
+            "member_id": members[0]['id'],
+            "bank_id": banks[0]['id']
+        }
+        
+        # Note: We can't directly create transactions via POST /transactions endpoint
+        # as it's not implemented in the backend. Transactions are created via import.
+        # So we'll test getting a specific transaction instead
+        
+        # Get all transactions first
+        success, transactions = self.run_test("Get Transactions for Individual Test", "GET", "transactions", 200)
+        if not success or not transactions:
+            self.log_test("Get Transactions for Individual Test", False, "No transactions found")
+            return False
+        
+        # Test getting a specific transaction
+        transaction_id = transactions[0]['id']
+        success, response = self.run_test(
+            "Get Individual Transaction",
+            "GET",
+            f"transactions/{transaction_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Test updating the transaction
+        update_data = {
+            "date": response['date'],
+            "description": "Updated Test Transaction",
+            "amount": response['amount'],
+            "type": response['type'],
+            "member_id": response['member_id'],
+            "bank_id": response['bank_id']
+        }
+        
+        success, updated_response = self.run_test(
+            "Update Transaction",
+            "PUT",
+            f"transactions/{transaction_id}",
+            200,
+            data=update_data
+        )
+        
+        if not success:
+            return False
+        
+        # Verify update
+        if updated_response.get('description') == "Updated Test Transaction":
+            self.log_test("Transaction Update Verification", True, "Description updated correctly")
+        else:
+            self.log_test("Transaction Update Verification", False, f"Expected 'Updated Test Transaction', got '{updated_response.get('description')}'")
+            return False
+        
+        # Test deleting the transaction (we'll restore it by updating back)
+        # Actually, let's not delete as it might affect other tests
+        # Instead, restore the original description
+        restore_data = {
+            "date": response['date'],
+            "description": response['description'],  # Original description
+            "amount": response['amount'],
+            "type": response['type'],
+            "member_id": response['member_id'],
+            "bank_id": response['bank_id']
+        }
+        
+        success, restored_response = self.run_test(
+            "Restore Transaction Description",
+            "PUT",
+            f"transactions/{transaction_id}",
+            200,
+            data=restore_data
+        )
+        
+        return success
+
+    def run_complete_backend_tests(self):
+        """Run COMPLETE test of ALL FinFamily backend endpoints"""
+        print("🚀 COMPLETE FinFamily Backend API Testing")
+        print("=" * 60)
+        
+        # Reset counters for complete test
+        self.tests_run = 0
+        self.tests_passed = 0
+        self.test_results = []
+        
+        # 1. AUTHENTICATION TESTS
+        print("🔐 1. TESTING AUTHENTICATION...")
+        if not self.test_auth_login_existing_user():
+            print("❌ Login with test user failed, stopping tests")
+            return False
+            
+        print(f"✅ Authenticated as: {self.user_data.get('name')} ({self.user_data.get('email')})")
+        print(f"✅ Admin status: {self.user_data.get('is_admin')}")
+        
+        # Test registration
+        self.test_auth_register_new_user()
+        self.test_invalid_login()
+        print()
+        
+        # 2. FAMILY, BANKS, CATEGORIES CRUD
+        print("👨‍👩‍👧‍👦 2. TESTING FAMILY, BANKS, CATEGORIES CRUD...")
+        self.test_family_crud()
+        self.test_banks_crud()
+        self.test_categories_crud()
+        print()
+        
+        # 3. TRANSACTIONS
+        print("💳 3. TESTING TRANSACTIONS...")
+        self.test_transactions_crud_and_filters()
+        self.test_transaction_individual_operations()
+        self.test_transactions_with_category_filter()
+        print()
+        
+        # 4. DASHBOARD
+        print("📊 4. TESTING DASHBOARD...")
+        self.test_complete_dashboard_apis()
+        print()
+        
+        # 5. GOALS (METAS)
+        print("🎯 5. TESTING GOALS (METAS)...")
+        self.test_goals_crud()
+        print()
+        
+        # 6. PROFILE
+        print("👤 6. TESTING PROFILE...")
+        self.test_profile_endpoints()
+        self.test_change_password_endpoint()
+        self.test_delete_all_transactions_endpoint()
+        print()
+        
+        # 7. GAMIFICATION
+        print("🎮 7. TESTING GAMIFICATION...")
+        self.test_gamification_health_score()
+        self.test_gamification_badges()
+        self.test_gamification_check_badges()
+        self.test_gamification_challenges_crud()
+        print()
+        
+        # 8. CATEGORIZATION RULES
+        print("🏷️ 8. TESTING CATEGORIZATION RULES...")
+        self.test_categorization_rules_crud()
+        self.test_auto_categorization_on_import()
+        print()
+        
+        # Print final summary
+        print("=" * 60)
+        print(f"📊 COMPLETE BACKEND TESTS SUMMARY")
+        print(f"Total Tests: {self.tests_run}")
+        print(f"Passed: {self.tests_passed}")
+        print(f"Failed: {self.tests_run - self.tests_passed}")
+        print(f"Success Rate: {(self.tests_passed/self.tests_run)*100:.1f}%")
+        
+        # Show failed tests
+        failed_tests = [test for test in self.test_results if not test['success']]
+        if failed_tests:
+            print("\n❌ FAILED TESTS:")
+            for test in failed_tests:
+                print(f"  - {test['test']}: {test['details']}")
+        else:
+            print("\n✅ ALL TESTS PASSED!")
+        
+        return self.tests_passed == self.tests_run
+
     def run_new_features_tests(self):
         """Run tests for new features specifically mentioned in review request"""
         print("🚀 Starting FinFamily New Features Backend Tests")
