@@ -809,6 +809,69 @@ async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Goal not found")
     return {"message": "Goal deleted successfully"}
 
+# Profile endpoints
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    profile_photo: Optional[str] = None
+    preferences: Optional[dict] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.get("/profile")
+async def get_profile(user_id: str = Depends(verify_token)):
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user_doc
+
+@api_router.put("/profile")
+async def update_profile(profile: ProfileUpdate, user_id: str = Depends(verify_token)):
+    update_data = {}
+    if profile.name is not None:
+        update_data['name'] = profile.name
+    if profile.profile_photo is not None:
+        update_data['profile_photo'] = profile.profile_photo
+    if profile.preferences is not None:
+        update_data['preferences'] = profile.preferences
+    
+    if update_data:
+        result = await db.users.update_one(
+            {"id": user_id},
+            {"$set": update_data}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    return updated_user
+
+@api_router.post("/profile/change-password")
+async def change_password(data: PasswordChange, user_id: str = Depends(verify_token)):
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not bcrypt.checkpw(data.current_password.encode('utf-8'), user_doc['password'].encode('utf-8')):
+        raise HTTPException(status_code=400, detail="Senha atual incorreta")
+    
+    # Hash new password
+    hashed_password = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt())
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password": hashed_password.decode('utf-8')}}
+    )
+    
+    return {"message": "Senha alterada com sucesso"}
+
+@api_router.delete("/transactions/delete-all")
+async def delete_all_transactions(user_id: str = Depends(verify_token)):
+    result = await db.transactions.delete_many({"user_id": user_id})
+    return {"message": f"Todas as {result.deleted_count} transações foram excluídas com sucesso", "count": result.deleted_count}
+
 
 app.include_router(api_router)
 
