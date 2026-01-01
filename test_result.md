@@ -342,12 +342,60 @@ metadata:
   run_ui: true
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Health Score API"
+    - "Badges API"
+    - "Family Challenges API"
+    - "Gamification UI Widgets"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "main"
+    message: |
+      NOVA IMPLEMENTAÇÃO: Sistema de Gamificação e Psicologia Financeira
+      
+      BACKEND - Novos endpoints implementados:
+      1. GET /api/gamification/health-score - Calcula score de saúde financeira (0-100)
+         - Critérios: Reserva (30pts), Despesas vs Renda (30pts), Constância (20pts), Metas (20pts)
+         - Retorna level (Crítico/Atenção/Bom/Excelente) e dicas personalizadas
+      
+      2. GET /api/gamification/badges - Lista todas as conquistas e status de desbloqueio
+         - 8 badges disponíveis: Mês sem Juros, Poupador Iniciante, Meta de Reserva Batida, etc.
+      
+      3. POST /api/gamification/check-badges - Verifica e desbloqueia badges automaticamente
+         - Analisa transações, metas e reserva para desbloquear conquistas
+      
+      4. POST /api/gamification/challenges - Criar desafio em família
+      5. GET /api/gamification/challenges - Listar desafios
+      6. PUT /api/gamification/challenges/{id} - Atualizar desafio
+      7. POST /api/gamification/challenges/{id}/progress - Registrar progresso
+      8. DELETE /api/gamification/challenges/{id} - Excluir desafio
+      
+      FRONTEND - Novos componentes:
+      - GamificationWidgets.jsx com 3 widgets:
+        1. HealthScoreWidget - Círculo animado com score e barras de progresso
+        2. BadgesWidget - Grid de conquistas com tooltips
+        3. FamilyChallengesWidget - Card de desafio ativo com progresso
+      - Integrado no Dashboard.jsx
+      
+      CREDENCIAIS DE TESTE:
+      - Email: super@finamily.com
+      - Password: Admin@2025
+      
+      DADOS EXISTENTES:
+      - 2 badges já desbloqueados: "Poupador Iniciante" e "Reserva Sólida"
+      - 1 desafio criado: "Economizar na Energia" (R$ 200, recompensa: Jantar especial)
+      
+      Por favor, teste:
+      1. Login e visualização do Dashboard
+      2. Scroll para seção "Gamificação & Motivação"
+      3. Card de Saúde Financeira mostrando score e dicas
+      4. Grid de Conquistas com badges desbloqueados/bloqueados
+      5. Desafio em Família com progresso e botão "Registrar Economia"
+      6. Modal de criar novo desafio
+      7. Modal de registrar economia no desafio
   - agent: "main"
     message: |
       Implementei correções para os 3 bugs reportados pelo usuário:
