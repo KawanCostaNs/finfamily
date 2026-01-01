@@ -554,19 +554,29 @@ async def import_transactions(file: UploadFile = File(...), member_id: str = For
         
         if transactions:
             docs = []
+            auto_categorized = 0
             for trans in transactions:
                 doc = trans.model_dump()
                 doc['date'] = doc['date'].isoformat()
                 doc['created_at'] = doc['created_at'].isoformat()
                 doc['user_id'] = user_id
+                
+                # Apply categorization rules
+                category_id = await apply_categorization_rules(trans.description, user_id)
+                if category_id:
+                    doc['category_id'] = category_id
+                    auto_categorized += 1
+                
                 docs.append(doc)
             await db.transactions.insert_many(docs)
         
         message = f"Successfully imported {len(transactions)} new transactions"
         if duplicates_count > 0:
             message += f" ({duplicates_count} duplicates skipped)"
+        if auto_categorized > 0:
+            message += f" ({auto_categorized} auto-categorized)"
         
-        return {"message": message, "count": len(transactions), "duplicates": duplicates_count, "total_processed": len(transactions) + duplicates_count}
+        return {"message": message, "count": len(transactions), "duplicates": duplicates_count, "auto_categorized": auto_categorized, "total_processed": len(transactions) + duplicates_count}
     except Exception as e:
         logging.error(f"Error importing: {e}")
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
