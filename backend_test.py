@@ -727,6 +727,308 @@ class FinancialAppTester:
         
         return True
 
+    def test_categorization_rules_crud(self):
+        """Test Categorization Rules CRUD operations"""
+        # First, get categories to find "Alimentação" category for our test rule
+        success, categories_response = self.run_test(
+            "Get Categories for Rules Test",
+            "GET",
+            "categories",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Find "Alimentação" category
+        alimentacao_category = None
+        for category in categories_response:
+            if category.get('name') == 'Alimentação':
+                alimentacao_category = category
+                break
+        
+        if not alimentacao_category:
+            self.log_test("Find Alimentação Category", False, "Alimentação category not found")
+            return False
+        else:
+            self.log_test("Find Alimentação Category", True, f"Found category with ID: {alimentacao_category['id']}")
+        
+        # 1. Test CREATE RULE - Create rule with keyword "mercado" for "Alimentação" category
+        rule_data = {
+            "keyword": "mercado",
+            "category_id": alimentacao_category['id'],
+            "match_type": "contains",
+            "priority": 10,
+            "is_active": True
+        }
+        
+        success, create_response = self.run_test(
+            "Create Categorization Rule",
+            "POST",
+            "categorization-rules",
+            200,
+            data=rule_data
+        )
+        
+        if not success:
+            return False
+            
+        rule_id = create_response.get('id')
+        if not rule_id:
+            self.log_test("Get Created Rule ID", False, "No ID returned from create")
+            return False
+        else:
+            self.log_test("Get Created Rule ID", True, f"Rule ID: {rule_id}")
+        
+        # Verify rule data
+        if create_response.get('keyword') == 'mercado' and create_response.get('category_id') == alimentacao_category['id']:
+            self.log_test("Rule Creation Data Verification", True, "Rule created with correct data")
+        else:
+            self.log_test("Rule Creation Data Verification", False, f"Rule data mismatch: {create_response}")
+            return False
+        
+        # 2. Test GET RULES - Should return list of rules sorted by priority
+        success, rules_response = self.run_test(
+            "Get Categorization Rules",
+            "GET",
+            "categorization-rules",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify response is a list
+        if not isinstance(rules_response, list):
+            self.log_test("Rules List Structure", False, "Response is not a list")
+            return False
+        else:
+            self.log_test("Rules List Structure", True, f"Got {len(rules_response)} rules")
+        
+        # Check if our created rule is in the list
+        our_rule = None
+        for rule in rules_response:
+            if rule.get('id') == rule_id:
+                our_rule = rule
+                break
+        
+        if our_rule:
+            self.log_test("Find Created Rule in List", True, f"Found rule with keyword: {our_rule.get('keyword')}")
+        else:
+            self.log_test("Find Created Rule in List", False, "Created rule not found in list")
+            return False
+        
+        # Check if there's an existing "uber" → "Transporte" rule as mentioned in review request
+        uber_rule = None
+        for rule in rules_response:
+            if rule.get('keyword', '').lower() == 'uber':
+                uber_rule = rule
+                break
+        
+        if uber_rule:
+            self.log_test("Find Uber Rule", True, f"Found uber rule with ID: {uber_rule.get('id')}")
+        else:
+            self.log_test("Find Uber Rule", False, "Uber → Transporte rule not found (may not exist yet)")
+        
+        # 3. Test UPDATE RULE - Update keyword or priority
+        update_data = {
+            "keyword": "supermercado",
+            "category_id": alimentacao_category['id'],
+            "match_type": "contains",
+            "priority": 15,
+            "is_active": True
+        }
+        
+        success, update_response = self.run_test(
+            "Update Categorization Rule",
+            "PUT",
+            f"categorization-rules/{rule_id}",
+            200,
+            data=update_data
+        )
+        
+        if not success:
+            return False
+        
+        # Verify update
+        if update_response.get('keyword') == 'supermercado' and update_response.get('priority') == 15:
+            self.log_test("Rule Update Verification", True, "Rule updated correctly")
+        else:
+            self.log_test("Rule Update Verification", False, f"Update failed: {update_response}")
+            return False
+        
+        # 4. Test DELETE RULE
+        success, delete_response = self.run_test(
+            "Delete Categorization Rule",
+            "DELETE",
+            f"categorization-rules/{rule_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Verify deletion by getting rules again
+        success, rules_after_delete = self.run_test(
+            "Verify Rule Deleted",
+            "GET",
+            "categorization-rules",
+            200
+        )
+        
+        if success:
+            # Check that our test rule is no longer in the list
+            rule_still_exists = any(r.get('id') == rule_id for r in rules_after_delete)
+            
+            if not rule_still_exists:
+                self.log_test("Rule Deletion Verification", True, "Test rule successfully deleted")
+            else:
+                self.log_test("Rule Deletion Verification", False, "Test rule still exists after deletion")
+                return False
+        
+        return True
+
+    def test_auto_categorization_on_import(self):
+        """Test that auto-categorization works during transaction import"""
+        # First, get categories to set up test rules
+        success, categories_response = self.run_test(
+            "Get Categories for Auto-Categorization Test",
+            "GET",
+            "categories",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Find "Transporte" category for uber rule
+        transporte_category = None
+        for category in categories_response:
+            if category.get('name') == 'Transporte':
+                transporte_category = category
+                break
+        
+        if not transporte_category:
+            self.log_test("Find Transporte Category", False, "Transporte category not found")
+            return False
+        else:
+            self.log_test("Find Transporte Category", True, f"Found category with ID: {transporte_category['id']}")
+        
+        # Create a test rule for "uber" → "Transporte"
+        uber_rule_data = {
+            "keyword": "uber",
+            "category_id": transporte_category['id'],
+            "match_type": "contains",
+            "priority": 20,
+            "is_active": True
+        }
+        
+        success, uber_rule_response = self.run_test(
+            "Create Uber Rule for Auto-Categorization",
+            "POST",
+            "categorization-rules",
+            200,
+            data=uber_rule_data
+        )
+        
+        if not success:
+            return False
+        
+        uber_rule_id = uber_rule_response.get('id')
+        
+        # Get family members and banks for transaction import
+        success, members_response = self.run_test(
+            "Get Family Members for Import",
+            "GET",
+            "family",
+            200
+        )
+        
+        if not success or not members_response:
+            self.log_test("Get Family Members for Import", False, "No family members found")
+            return False
+        
+        success, banks_response = self.run_test(
+            "Get Banks for Import",
+            "GET",
+            "banks",
+            200
+        )
+        
+        if not success or not banks_response:
+            self.log_test("Get Banks for Import", False, "No banks found")
+            return False
+        
+        member_id = members_response[0]['id']
+        bank_id = banks_response[0]['id']
+        
+        # Create a test CSV with "uber" transaction
+        test_csv_content = """Data,Descrição,Valor
+2025-01-15,Uber viagem centro,-25.50
+2025-01-16,Compra supermercado,-45.00"""
+        
+        # Test import with auto-categorization
+        files = {'file': ('test_transactions.csv', test_csv_content, 'text/csv')}
+        form_data = {
+            'member_id': member_id,
+            'bank_id': bank_id
+        }
+        
+        success, import_response = self.run_test(
+            "Import Transactions with Auto-Categorization",
+            "POST",
+            "transactions/import",
+            200,
+            data=form_data,
+            files=files
+        )
+        
+        if not success:
+            # Clean up the rule before returning
+            self.run_test("Cleanup Uber Rule", "DELETE", f"categorization-rules/{uber_rule_id}", 200)
+            return False
+        
+        # Check if auto-categorization worked
+        auto_categorized = import_response.get('auto_categorized', 0)
+        if auto_categorized > 0:
+            self.log_test("Auto-Categorization on Import", True, f"{auto_categorized} transactions auto-categorized")
+        else:
+            self.log_test("Auto-Categorization on Import", False, "No transactions were auto-categorized")
+        
+        # Verify by getting recent transactions and checking if uber transaction was categorized
+        success, transactions_response = self.run_test(
+            "Get Transactions to Verify Auto-Categorization",
+            "GET",
+            "transactions",
+            200
+        )
+        
+        if success:
+            # Look for the uber transaction
+            uber_transaction = None
+            for trans in transactions_response:
+                if 'uber' in trans.get('description', '').lower():
+                    uber_transaction = trans
+                    break
+            
+            if uber_transaction:
+                if uber_transaction.get('category_id') == transporte_category['id']:
+                    self.log_test("Uber Transaction Categorized", True, f"Uber transaction correctly categorized as Transporte")
+                else:
+                    self.log_test("Uber Transaction Categorized", False, f"Uber transaction not categorized correctly")
+            else:
+                self.log_test("Find Uber Transaction", False, "Uber transaction not found in recent transactions")
+        
+        # Clean up: Delete the test rule
+        success, cleanup_response = self.run_test(
+            "Cleanup Uber Rule",
+            "DELETE",
+            f"categorization-rules/{uber_rule_id}",
+            200
+        )
+        
+        return True
+
     def run_gamification_tests(self):
         """Run tests for gamification features specifically"""
         print("🎮 Starting FinFamily Gamification Backend Tests")
