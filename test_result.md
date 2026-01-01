@@ -424,9 +424,6 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Health Score API"
-    - "Badges API"
-    - "Family Challenges API"
     - "Gamification UI Widgets"
   stuck_tasks: []
   test_all: false
