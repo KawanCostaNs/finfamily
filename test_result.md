@@ -245,6 +245,42 @@ frontend:
         agent: "testing"
         comment: "TESTED: Emergency Reserve card working perfectly. Shows exact amount R$ 2.000,00, has special golden/amber styling (border-amber-500/50, bg-gradient), displays appropriate message about expenses goal. Card visible with correct data-testid='emergency-reserve-card'."
 
+  - task: "Health Score Widget"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/GamificationWidgets.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementado widget de Score de Saúde Financeira com círculo animado, barras de progresso e dicas personalizadas."
+
+  - task: "Badges Widget"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/GamificationWidgets.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementado grid de conquistas com 8 badges. Mostra badges desbloqueados vs bloqueados com tooltips."
+
+  - task: "Family Challenges Widget"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/GamificationWidgets.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implementado card de desafio em família com progresso, recompensa, botão de registrar economia e modais de criar/atualizar."
+
   - task: "Dashboard Charts - Receita vs Despesa"
     implemented: true
     working: true
