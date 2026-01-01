@@ -102,18 +102,15 @@ class FinancialAppTester:
             return True
         return False
 
-    def test_auth_login(self):
-        """Test user login with existing user"""
-        if not self.user_data:
-            return False
-            
+    def test_auth_login_existing_user(self):
+        """Test login with existing test user"""
         login_data = {
-            "email": self.user_data['email'],
-            "password": "TestPass123!"
+            "email": self.test_email,
+            "password": self.test_password
         }
         
         success, response = self.run_test(
-            "User Login",
+            "Login with Test User",
             "POST",
             "auth/login",
             200,
@@ -122,8 +119,163 @@ class FinancialAppTester:
         
         if success and 'access_token' in response:
             self.token = response['access_token']
+            self.user_data = response['user']
             return True
         return False
+
+    def test_profile_endpoints(self):
+        """Test profile-related endpoints"""
+        # Test GET /api/profile
+        success, response = self.run_test(
+            "Get Profile Data",
+            "GET",
+            "profile",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify profile data structure
+        profile_data = response
+        expected_fields = ['id', 'email', 'name', 'is_admin']
+        missing_fields = [field for field in expected_fields if field not in profile_data]
+        
+        if missing_fields:
+            self.log_test("Profile Data Structure", False, f"Missing fields: {missing_fields}")
+            return False
+        else:
+            self.log_test("Profile Data Structure", True, "All required fields present")
+        
+        # Test PUT /api/profile - Update name
+        original_name = profile_data.get('name', '')
+        update_data = {
+            "name": "Updated Test Name"
+        }
+        
+        success, response = self.run_test(
+            "Update Profile Name",
+            "PUT",
+            "profile",
+            200,
+            data=update_data
+        )
+        
+        if not success:
+            return False
+            
+        # Verify name was updated
+        if response.get('name') == "Updated Test Name":
+            self.log_test("Profile Name Update Verification", True, "Name updated correctly")
+        else:
+            self.log_test("Profile Name Update Verification", False, f"Expected 'Updated Test Name', got '{response.get('name')}'")
+            return False
+        
+        # Restore original name
+        restore_data = {"name": original_name}
+        success, response = self.run_test(
+            "Restore Original Profile Name",
+            "PUT",
+            "profile",
+            200,
+            data=restore_data
+        )
+        
+        return success
+
+    def test_change_password_endpoint(self):
+        """Test password change endpoint with incorrect current password"""
+        # Test with INCORRECT current password (should fail)
+        password_data = {
+            "current_password": "WrongPassword123!",
+            "new_password": "NewPassword123!"
+        }
+        
+        success, response = self.run_test(
+            "Change Password with Wrong Current Password",
+            "POST",
+            "profile/change-password",
+            400,  # Should fail with 400
+            data=password_data
+        )
+        
+        # This test passes if it correctly returns 400 (bad request)
+        return success
+
+    def test_delete_all_transactions_endpoint(self):
+        """Test that delete all transactions endpoint exists (without executing)"""
+        # We'll test with a HEAD request or check if endpoint exists
+        # by making a request without proper auth to see if endpoint is recognized
+        
+        # Remove token temporarily to test endpoint existence
+        original_token = self.token
+        self.token = "invalid_token"
+        
+        success, response = self.run_test(
+            "Delete All Transactions Endpoint Exists",
+            "DELETE",
+            "transactions/delete-all",
+            401,  # Should return 401 for invalid token, proving endpoint exists
+        )
+        
+        # Restore token
+        self.token = original_token
+        
+        # If we get 401, it means the endpoint exists but auth failed (which is expected)
+        return success
+
+    def test_transactions_with_category_filter(self):
+        """Test transactions endpoint with category filtering"""
+        # First get categories to find "Reserva de Emergência"
+        success, categories_response = self.run_test(
+            "Get Categories for Filter Test",
+            "GET",
+            "categories",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Find "Reserva de Emergência" category
+        emergency_category = None
+        for category in categories_response:
+            if category.get('name') == 'Reserva de Emergência':
+                emergency_category = category
+                break
+        
+        if not emergency_category:
+            self.log_test("Find Emergency Reserve Category", False, "Reserva de Emergência category not found")
+            return False
+        else:
+            self.log_test("Find Emergency Reserve Category", True, f"Found category with ID: {emergency_category['id']}")
+        
+        # Get all transactions
+        success, all_transactions = self.run_test(
+            "Get All Transactions",
+            "GET",
+            "transactions",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Count transactions with "Reserva de Emergência" category
+        emergency_transactions = [
+            t for t in all_transactions 
+            if t.get('category_id') == emergency_category['id']
+        ]
+        
+        expected_count = 2  # According to review request
+        actual_count = len(emergency_transactions)
+        
+        if actual_count == expected_count:
+            self.log_test("Emergency Reserve Transactions Count", True, f"Found {actual_count} transactions as expected")
+            return True
+        else:
+            self.log_test("Emergency Reserve Transactions Count", False, f"Expected {expected_count}, found {actual_count}")
+            return False
 
     def test_family_crud(self):
         """Test family member CRUD operations"""
