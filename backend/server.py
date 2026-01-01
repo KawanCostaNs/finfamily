@@ -810,6 +810,53 @@ async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
     return {"message": "Goal deleted successfully"}
 
 # Profile endpoints
+# ==================== GAMIFICATION MODELS ====================
+
+class Badge(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str
+    icon: str  # emoji or icon name
+    criteria: str  # how to earn this badge
+    unlocked: bool = False
+    unlocked_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class FamilyChallenge(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str
+    target_amount: float
+    current_amount: float = 0.0
+    reward: str  # what the family gets when completing
+    deadline: Optional[datetime] = None
+    category_id: Optional[str] = None  # optional category to track
+    is_active: bool = True
+    is_completed: bool = False
+    completed_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class FamilyChallengeCreate(BaseModel):
+    name: str
+    description: str
+    target_amount: float
+    reward: str
+    deadline: Optional[datetime] = None
+    category_id: Optional[str] = None
+
+class HealthScore(BaseModel):
+    total_score: int  # 0-100
+    reserve_score: int  # 0-30
+    expense_ratio_score: int  # 0-30
+    consistency_score: int  # 0-20
+    goals_score: int  # 0-20
+    level: str  # "Crítico", "Atenção", "Bom", "Excelente"
+    tips: List[str]
+
+# ==================== END GAMIFICATION MODELS ====================
+
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     profile_photo: Optional[str] = None
