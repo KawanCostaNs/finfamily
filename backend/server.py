@@ -706,6 +706,98 @@ async def get_monthly_comparison(year: int, user_id: str = Depends(verify_token)
         result.append(MonthlyComparison(month=month_names[month_num-1], income=income, expenses=expenses))
     return result
 
+# ==================== CATEGORIZATION RULES MODELS ====================
+
+class CategorizationRule(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    keyword: str  # palavra-chave para buscar na descrição
+    category_id: str  # categoria a ser aplicada
+    match_type: str = "contains"  # "contains", "starts_with", "exact"
+    is_active: bool = True
+    priority: int = 0  # regras com maior prioridade são aplicadas primeiro
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CategorizationRuleCreate(BaseModel):
+    keyword: str
+    category_id: str
+    match_type: str = "contains"
+    is_active: bool = True
+    priority: int = 0
+
+# ==================== CATEGORIZATION RULES ENDPOINTS ====================
+
+@api_router.post("/categorization-rules")
+async def create_categorization_rule(rule: CategorizationRuleCreate, user_id: str = Depends(verify_token)):
+    """Create a new categorization rule"""
+    rule_obj = CategorizationRule(**rule.model_dump())
+    doc = rule_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['user_id'] = user_id
+    await db.categorization_rules.insert_one(doc)
+    return rule_obj
+
+@api_router.get("/categorization-rules")
+async def get_categorization_rules(user_id: str = Depends(verify_token)):
+    """Get all categorization rules for the user"""
+    rules = await db.categorization_rules.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for rule in rules:
+        if isinstance(rule.get('created_at'), str):
+            rule['created_at'] = datetime.fromisoformat(rule['created_at'])
+    return sorted(rules, key=lambda x: x.get('priority', 0), reverse=True)
+
+@api_router.put("/categorization-rules/{rule_id}")
+async def update_categorization_rule(rule_id: str, rule: CategorizationRuleCreate, user_id: str = Depends(verify_token)):
+    """Update a categorization rule"""
+    update_data = rule.model_dump()
+    result = await db.categorization_rules.update_one(
+        {"id": rule_id, "user_id": user_id},
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    updated = await db.categorization_rules.find_one({"id": rule_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/categorization-rules/{rule_id}")
+async def delete_categorization_rule(rule_id: str, user_id: str = Depends(verify_token)):
+    """Delete a categorization rule"""
+    result = await db.categorization_rules.delete_one({"id": rule_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return {"message": "Rule deleted successfully"}
+
+async def apply_categorization_rules(description: str, user_id: str) -> Optional[str]:
+    """Apply categorization rules to a transaction description and return category_id if matched"""
+    rules = await db.categorization_rules.find(
+        {"user_id": user_id, "is_active": True}, 
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Sort by priority (highest first)
+    rules = sorted(rules, key=lambda x: x.get('priority', 0), reverse=True)
+    
+    description_lower = description.lower()
+    
+    for rule in rules:
+        keyword_lower = rule['keyword'].lower()
+        match_type = rule.get('match_type', 'contains')
+        
+        matched = False
+        if match_type == 'contains':
+            matched = keyword_lower in description_lower
+        elif match_type == 'starts_with':
+            matched = description_lower.startswith(keyword_lower)
+        elif match_type == 'exact':
+            matched = description_lower == keyword_lower
+        
+        if matched:
+            return rule['category_id']
+    
+    return None
+
+# ==================== END CATEGORIZATION RULES ====================
+
 # ==================== GAMIFICATION MODELS ====================
 
 class Badge(BaseModel):
