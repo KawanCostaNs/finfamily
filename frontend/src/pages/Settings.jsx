@@ -466,6 +466,106 @@ export default function Settings() {
             </Card>
           )}
         </TabsContent>
+
+        {/* Rules Tab */}
+        <TabsContent value="rules" className="space-y-4">
+          <Card className="glass-card border-slate-800 border-cyan-500/30 bg-gradient-to-br from-cyan-900/10 to-cyan-950/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-cyan-300 text-base">
+                <Wand2 className="w-5 h-5" />
+                Categorização Automática
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                Defina regras para categorizar automaticamente suas transações na importação.
+                Quando uma descrição corresponder a uma palavra-chave, a categoria será aplicada automaticamente.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <div className="flex justify-end">
+            <Button
+              data-testid="add-rule-button"
+              onClick={() => setRuleDialog({ open: true, data: null })}
+              className="bg-cyan-600 hover:bg-cyan-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Regra
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {rules.map((rule) => (
+              <Card key={rule.id} data-testid="rule-card" className={`glass-card border-slate-800 card-hover ${!rule.is_active ? 'opacity-50' : ''}`}>
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1">
+                      <Switch
+                        checked={rule.is_active}
+                        onCheckedChange={() => handleToggleRule(rule)}
+                        className="data-[state=checked]:bg-cyan-600"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-white font-medium">
+                            Se descrição
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-800 text-cyan-400 text-sm">
+                            {getMatchTypeLabel(rule.match_type)}
+                          </span>
+                          <span className="px-2 py-1 rounded bg-cyan-900/50 text-cyan-300 font-mono text-sm">
+                            "{rule.keyword}"
+                          </span>
+                          <span className="text-slate-400">→</span>
+                          <span className="px-2 py-0.5 rounded bg-blue-900/50 text-blue-300 text-sm">
+                            {getCategoryName(rule.category_id)}
+                          </span>
+                        </div>
+                        {rule.priority > 0 && (
+                          <div className="flex items-center gap-1 mt-1 text-xs text-slate-500">
+                            <ArrowDownUp className="w-3 h-3" />
+                            Prioridade: {rule.priority}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        data-testid="edit-rule-button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setRuleDialog({ open: true, data: rule })}
+                        className="text-blue-400 hover:text-blue-300 hover:bg-slate-800"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        data-testid="delete-rule-button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteRule(rule.id)}
+                        className="text-red-400 hover:text-red-300 hover:bg-slate-800"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {rules.length === 0 && (
+            <Card className="solid-card border-slate-800">
+              <CardContent className="py-12 text-center">
+                <Wand2 className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400 mb-2">Nenhuma regra de categorização criada.</p>
+                <p className="text-sm text-slate-500">
+                  Exemplo: "uber" → Transporte, "mercado" → Alimentação
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Member Dialog */}
