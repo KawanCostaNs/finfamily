@@ -519,7 +519,7 @@ async def import_transactions(file: UploadFile = File(...), member_id: str = For
                             try:
                                 trans_date = datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
                                 break
-                            except:
+                            except ValueError:
                                 continue
                     
                     existing = await db.transactions.find_one({"user_id": user_id, "date": trans_date.isoformat(), "description": description, "amount": abs(amount), "member_id": member_id, "bank_id": bank_id})
