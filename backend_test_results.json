@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-01-01T00:25:42.110996",
-  "test_type": "new_features",
-  "total_tests": 12,
-  "passed_tests": 12,
+  "timestamp": "2026-01-01T09:35:15.781802",
+  "test_type": "gamification_features",
+  "total_tests": 24,
+  "passed_tests": 24,
   "success_rate": 100.0,
   "results": [
     {
@@ -11,59 +11,119 @@
       "details": "Status: 200"
     },
     {
-      "test": "Get Profile Data",
+      "test": "Get Health Score",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Profile Data Structure",
+      "test": "Health Score Structure",
       "success": true,
       "details": "All required fields present"
     },
     {
-      "test": "Update Profile Name",
+      "test": "Health Score Range",
+      "success": true,
+      "details": "Total score: 7"
+    },
+    {
+      "test": "Health Score Level",
+      "success": true,
+      "details": "Level: Cr\u00edtico"
+    },
+    {
+      "test": "Health Score Tips",
+      "success": true,
+      "details": "Tips count: 3"
+    },
+    {
+      "test": "Get Badges",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Profile Name Update Verification",
+      "test": "Badges Count",
       "success": true,
-      "details": "Name updated correctly"
+      "details": "8 badges returned"
     },
     {
-      "test": "Restore Original Profile Name",
+      "test": "All Badges Structure",
+      "success": true,
+      "details": "All badges have required fields"
+    },
+    {
+      "test": "Unlocked Badges Count",
+      "success": true,
+      "details": "2 badges unlocked"
+    },
+    {
+      "test": "Expected Badges Unlocked",
+      "success": true,
+      "details": "Found: ['Poupador Iniciante', 'Reserva S\u00f3lida']"
+    },
+    {
+      "test": "Check and Unlock Badges",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Change Password with Wrong Current Password",
+      "test": "Check Badges Response Structure",
       "success": true,
-      "details": "Status: 400"
+      "details": "All required fields present"
     },
     {
-      "test": "Delete All Transactions Endpoint Exists",
+      "test": "Check Badges Unlocked List",
       "success": true,
-      "details": "Status: 401"
+      "details": "Unlocked badges: 0"
     },
     {
-      "test": "Get Categories for Filter Test",
+      "test": "Check Badges Count Match",
+      "success": true,
+      "details": "Count matches unlocked list: 0"
+    },
+    {
+      "test": "Get Existing Challenges",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Find Emergency Reserve Category",
+      "test": "Find Energia Challenge",
       "success": true,
-      "details": "Found category with ID: 869ff41e-c198-4a61-8ef8-aa20b0184a11"
+      "details": "Found challenge with ID: 7b3c8e24-1170-474f-9c2c-725c0ab1b833"
     },
     {
-      "test": "Get All Transactions",
+      "test": "Create Test Challenge",
       "success": true,
       "details": "Status: 200"
     },
     {
-      "test": "Emergency Reserve Transactions Count",
+      "test": "Get Created Challenge ID",
       "success": true,
-      "details": "Found 2 transactions as expected"
+      "details": "Challenge ID: 9eff1d92-9a8d-4d1d-8927-b678b8540a98"
+    },
+    {
+      "test": "Update Challenge Progress",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Challenge Progress Update",
+      "success": true,
+      "details": "Progress updated to: 50.0"
+    },
+    {
+      "test": "Delete Test Challenge",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Verify Challenge Deleted",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Challenge Deletion Verification",
+      "success": true,
+      "details": "Test challenge successfully deleted"
     }
   ]
 }
