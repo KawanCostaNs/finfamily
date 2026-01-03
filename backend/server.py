@@ -868,7 +868,7 @@ async def get_emergency_reserve(user_id: str = Depends(verify_token)):
         
         # Get transactions for this category
         cursor = await db.execute(
-            "SELECT amount, type, is_reserve_deposit, is_reserve_withdrawal FROM transactions WHERE user_id = ? AND (category_id = ? OR is_reserve_deposit = 1 OR is_reserve_withdrawal = 1)",
+            "SELECT amount, type, category_id, is_reserve_deposit, is_reserve_withdrawal FROM transactions WHERE user_id = ? AND (category_id = ? OR is_reserve_deposit = 1 OR is_reserve_withdrawal = 1)",
             (user_id, category_id)
         )
         transactions = await cursor.fetchall()
