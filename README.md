@@ -1,106 +1,209 @@
-# FinFamily - Gestão Financeira Familiar
+# FinFamily - Gestão Financeira Familiar 🏠💰
 
-## 🚀 Deploy no Render
+Sistema completo de gestão financeira familiar, **self-hosted**, rodando em um único container Docker.
 
-### Pré-requisitos
+## ✨ Funcionalidades
 
-1. **Conta no MongoDB Atlas** (gratuito)
-   - Acesse: https://www.mongodb.com/cloud/atlas
-   - Crie um cluster gratuito (M0)
-   - Obtenha a connection string (formato: `mongodb+srv://user:password@cluster.mongodb.net/`)
+- 📊 **Dashboard** com resumo financeiro, gráficos e indicadores
+- 💳 **Importação de extratos** (CSV) com categorização automática
+- 👨‍👩‍👧‍👦 **Multi-usuário** com sistema de aprovação
+- 🎯 **Metas financeiras** com acompanhamento de progresso
+- 🏆 **Gamificação** - Badges, desafios em família e score de saúde financeira
+- 🔒 **Segurança** - Autenticação JWT, senhas hasheadas
+- 📱 **Interface moderna** - Dark mode, responsivo
 
-2. **Conta no Render** (gratuito)
-   - Acesse: https://render.com
-   - Conecte sua conta GitHub
+## 🚀 Deploy Rápido
 
-### Passo a Passo
-
-#### 1. Configurar MongoDB Atlas
-
-1. Crie um cluster gratuito no MongoDB Atlas
-2. Crie um usuário de banco de dados
-3. Adicione `0.0.0.0/0` na lista de IPs permitidos (Network Access)
-4. Copie a connection string
-
-#### 2. Deploy do Backend (API)
-
-1. No Render, clique em **New > Web Service**
-2. Conecte seu repositório GitHub
-3. Configure:
-   - **Name:** `finamily-api`
-   - **Root Directory:** `backend`
-   - **Runtime:** `Docker`
-   - **Instance Type:** Free
-
-4. Adicione as **Environment Variables**:
-   ```
-   MONGO_URL=mongodb+srv://seu-usuario:sua-senha@cluster.mongodb.net/finamily?retryWrites=true&w=majority
-   DB_NAME=finamily
-   JWT_SECRET=sua-chave-secreta-muito-segura-aqui
-   CORS_ORIGINS=https://finamily-app.onrender.com
-   ```
-
-5. Clique em **Create Web Service**
-
-#### 3. Deploy do Frontend
-
-1. No Render, clique em **New > Web Service**
-2. Conecte o mesmo repositório
-3. Configure:
-   - **Name:** `finamily-app`
-   - **Root Directory:** `frontend`
-   - **Runtime:** `Docker`
-   - **Instance Type:** Free
-
-4. Adicione as **Environment Variables**:
-   ```
-   REACT_APP_BACKEND_URL=https://finamily-api.onrender.com
-   ```
-
-5. Clique em **Create Web Service**
-
-### 📋 Variáveis de Ambiente
-
-#### Backend
-| Variável | Descrição | Exemplo |
-|----------|-----------|--------|
-| `MONGO_URL` | Connection string do MongoDB | `mongodb+srv://...` |
-| `DB_NAME` | Nome do banco de dados | `finamily` |
-| `JWT_SECRET` | Chave secreta para tokens JWT | `sua-chave-segura` |
-| `CORS_ORIGINS` | URLs permitidas (separadas por vírgula) | `https://finamily-app.onrender.com` |
-
-#### Frontend
-| Variável | Descrição | Exemplo |
-|----------|-----------|--------|
-| `REACT_APP_BACKEND_URL` | URL do backend | `https://finamily-api.onrender.com` |
-
-### ⚠️ Notas Importantes
-
-1. **Plano Gratuito do Render:**
-   - Os serviços "dormem" após 15 minutos de inatividade
-   - O primeiro acesso após dormir pode demorar 30-60 segundos
-
-2. **MongoDB Atlas Gratuito:**
-   - Limite de 512MB de armazenamento
-   - Suficiente para uso pessoal/familiar
-
-3. **Atualizações:**
-   - O Render faz deploy automático a cada push na branch main
-
-### 🔧 Desenvolvimento Local
+### Opção 1: Docker (Recomendado)
 
 ```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-uvicorn server:app --reload --port 8001
+# Clone o repositório
+git clone https://github.com/seu-usuario/finamily.git
+cd finamily
 
-# Frontend
+# Build e run
+docker build -t finamily .
+docker run -d \
+  -p 8000:8000 \
+  -v finamily_data:/app/data \
+  -e JWT_SECRET=sua-chave-secreta-muito-segura \
+  --name finamily \
+  finamily
+```
+
+Acesse: **http://localhost:8000**
+
+### Opção 2: Docker Compose
+
+Crie um arquivo `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  finamily:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - finamily_data:/app/data
+    environment:
+      - JWT_SECRET=sua-chave-secreta-muito-segura
+    restart: unless-stopped
+
+volumes:
+  finamily_data:
+```
+
+```bash
+docker-compose up -d
+```
+
+### Opção 3: Render.com (Free Tier)
+
+1. Fork este repositório
+2. Crie uma conta no [Render.com](https://render.com)
+3. New > Web Service > Connect your repo
+4. Configure:
+   - **Build Command:** `docker build -t finamily .`
+   - **Start Command:** Deixe em branco (usa CMD do Dockerfile)
+   - **Instance Type:** Free
+5. Adicione variável de ambiente:
+   - `JWT_SECRET` = sua chave secreta
+
+> ⚠️ No plano gratuito, o serviço "dorme" após 15min de inatividade.
+
+### Opção 4: Railway / Fly.io / DigitalOcean App Platform
+
+Todos suportam deploy via Dockerfile. Siga as instruções específicas de cada plataforma.
+
+## 📋 Variáveis de Ambiente
+
+| Variável | Descrição | Padrão |
+|----------|-----------|--------|
+| `JWT_SECRET` | Chave secreta para tokens JWT | `change-this-secret-key` |
+| `DATABASE_PATH` | Caminho do banco SQLite | `/app/data/finamily.db` |
+
+## 🗄️ Persistência de Dados
+
+Os dados são armazenados em um arquivo SQLite em `/app/data/finamily.db`.
+
+**Importante:** Monte um volume Docker para persistir os dados:
+
+```bash
+-v finamily_data:/app/data
+# ou
+-v /seu/caminho/local:/app/data
+```
+
+### Backup
+
+```bash
+# Copiar o banco de dados
+docker cp finamily:/app/data/finamily.db ./backup_$(date +%Y%m%d).db
+```
+
+### Restaurar
+
+```bash
+# Parar o container
+docker stop finamily
+
+# Copiar o backup
+docker cp ./backup.db finamily:/app/data/finamily.db
+
+# Iniciar novamente
+docker start finamily
+```
+
+## 👤 Primeiro Acesso
+
+1. Acesse a aplicação
+2. Clique em "Criar conta"
+3. O **primeiro usuário** é automaticamente administrador e aprovado
+4. Usuários subsequentes precisam de aprovação do admin
+
+**Credenciais padrão de desenvolvimento:**
+- Email: `admin@finamily.com`
+- Senha: (definida no registro)
+
+## 🛠️ Desenvolvimento Local
+
+### Backend
+
+```bash
+cd backend
+
+# Criar ambiente virtual
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou: venv\Scripts\activate  # Windows
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Rodar
+uvicorn server:app --reload --port 8001
+```
+
+### Frontend
+
+```bash
 cd frontend
+
+# Instalar dependências
 yarn install
+
+# Rodar em modo desenvolvimento
 yarn start
 ```
 
-### 📝 Licença
+## 📁 Estrutura do Projeto
 
-MIT
+```
+finamily/
+├── Dockerfile          # Build unificado (frontend + backend)
+├── README.md
+├── backend/
+│   ├── server.py       # API FastAPI
+│   ├── database.py     # Configuração SQLite
+│   ├── requirements.txt
+│   └── data/           # Banco SQLite (gerado automaticamente)
+└── frontend/
+    ├── package.json
+    ├── src/
+    │   ├── pages/      # Páginas React
+    │   ├── components/ # Componentes UI
+    │   └── App.js
+    └── public/
+```
+
+## 🔧 API Endpoints
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/api/auth/register` | Registro de usuário |
+| POST | `/api/auth/login` | Login |
+| GET | `/api/dashboard/summary` | Resumo financeiro |
+| GET | `/api/transactions` | Listar transações |
+| POST | `/api/transactions/import` | Importar CSV |
+| GET | `/api/gamification/health-score` | Score de saúde financeira |
+| GET | `/api/health` | Health check |
+
+[Ver documentação completa em `/docs`]
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie sua branch (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -m 'Add: nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
+
+## 📝 Licença
+
+MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+---
+
+Desenvolvido com ❤️ para famílias organizarem suas finanças.
