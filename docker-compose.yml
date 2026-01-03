@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  finamily:
+    build: .
+    container_name: finamily
+    ports:
+      - "8000:8000"
+    volumes:
+      - finamily_data:/app/data
+    environment:
+      - JWT_SECRET=mude-esta-chave-secreta-em-producao
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  finamily_data:
+    name: finamily_data
