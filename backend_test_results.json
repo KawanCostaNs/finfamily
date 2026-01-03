@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-01-03T00:55:03.945528",
+  "timestamp": "2026-01-03T00:58:16.250131",
   "test_type": "complete_backend_testing",
   "total_tests": 93,
-  "passed_tests": 84,
-  "success_rate": 90.32258064516128,
+  "passed_tests": 87,
+  "success_rate": 93.54838709677419,
   "results": [
     {
       "test": "Login with Test User",
@@ -93,7 +93,7 @@
     {
       "test": "Transaction Month/Year Filter",
       "success": true,
-      "details": "Filtered: 0, Total: 0"
+      "details": "Filtered: 0, Total: 8"
     },
     {
       "test": "Get Members for Transaction Test",
@@ -111,9 +111,9 @@
       "details": "Status: 200"
     },
     {
-      "test": "Get Transactions for Individual Test",
+      "test": "Get Individual Transaction",
       "success": false,
-      "details": "No transactions found"
+      "details": "Status: 405, Expected: 200, Error: Method Not Allowed"
     },
     {
       "test": "Get Categories for Filter Test",
@@ -132,8 +132,8 @@
     },
     {
       "test": "Emergency Reserve Transactions Count",
-      "success": false,
-      "details": "Expected 2, found 0"
+      "success": true,
+      "details": "Found 2 transactions as expected"
     },
     {
       "test": "Get Emergency Reserve",
@@ -143,12 +143,12 @@
     {
       "test": "Emergency Reserve Structure",
       "success": true,
-      "details": "Total: R$ 0"
+      "details": "Total: R$ 2000.0"
     },
     {
       "test": "Emergency Reserve Amount",
-      "success": false,
-      "details": "Expected R$ 2000.0, got R$ 0"
+      "success": true,
+      "details": "Correct amount: R$ 2000.0"
     },
     {
       "test": "Dashboard Summary",
@@ -283,7 +283,7 @@
     {
       "test": "Unlocked Badges Count",
       "success": false,
-      "details": "Expected at least 2 unlocked badges, got 0"
+      "details": "Expected at least 2 unlocked badges, got 1"
     },
     {
       "test": "Check and Unlock Badges",
@@ -312,8 +312,8 @@
     },
     {
       "test": "Find Energia Challenge",
-      "success": false,
-      "details": "Economizar na Energia challenge not found"
+      "success": true,
+      "details": "Found challenge with ID: 5863ed25-02f0-4a79-a918-0304cb032adf"
     },
     {
       "test": "Create Test Challenge",
@@ -323,7 +323,7 @@
     {
       "test": "Get Created Challenge ID",
       "success": true,
-      "details": "Challenge ID: 9ebc7496-01e7-4c9f-95ac-c297add534e7"
+      "details": "Challenge ID: ba8d7a52-8c23-47a8-8c10-e17bc64a0496"
     },
     {
       "test": "Update Challenge Progress",
@@ -368,7 +368,7 @@
     {
       "test": "Get Created Rule ID",
       "success": true,
-      "details": "Rule ID: a2a6afc2-dd15-402a-80bf-d49d74671ce9"
+      "details": "Rule ID: 34f374a3-5f55-4ba4-be1c-410c6a4b56f1"
     },
     {
       "test": "Rule Creation Data Verification",
