@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env.local
+
+# Node
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+frontend/coverage/
+
+# Build artifacts
+frontend/build/
+*.egg-info/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbbs.db
+
+# Test files
+test_result.md
+test_reports/
+*_test.py
+*_test_results.json
+debug_*.py
+
+# Logs
+*.log
+logs/
+
+# SQLite (will be created in container)
+backend/data/
+
+# Documentation (optional, remove if you want to include)
+*.md
+!README.md
+
+# Emergent specific
+.emergent/
