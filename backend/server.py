@@ -1,8 +1,14 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+"""
+FinFamily API - Self-hosted Financial Management
+Refactored to use SQLite and serve frontend statically
+"""
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 import os
 import logging
 from pathlib import Path
@@ -14,43 +20,64 @@ import bcrypt
 from jose import JWTError, jwt
 import io
 import csv
-from ofxparse import OfxParser
-from decimal import Decimal
+import hashlib
+import json
+
+# Database
+from database import init_db, get_db_context
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'finamily')]
+# Paths
+STATIC_DIR = ROOT_DIR / 'static'
+DATA_DIR = ROOT_DIR / 'data'
 
-app = FastAPI(title="FinFamily API", version="1.0.0")
-api_router = APIRouter(prefix="/api")
-security = HTTPBearer()
+# Ensure directories exist
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-SECRET_KEY = os.environ.get('JWT_SECRET', os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production'))
+# Configuration
+SECRET_KEY = os.environ.get('JWT_SECRET', os.environ.get('SECRET_KEY', 'change-this-secret-key-in-production'))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# CORS Configuration for production
-CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
-if CORS_ORIGINS == '*':
-    cors_origins = ["*"]
-else:
-    cors_origins = [origin.strip() for origin in CORS_ORIGINS.split(',')]
+# ==================== LIFESPAN ====================
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await init_db()
+    logging.info("🚀 FinFamily API started")
+    yield
+    # Shutdown
+    logging.info("👋 FinFamily API shutting down")
+
+# ==================== APP SETUP ====================
+
+app = FastAPI(
+    title="FinFamily API", 
+    version="2.0.0",
+    description="Self-hosted Family Financial Management",
+    lifespan=lifespan
+)
+
+api_router = APIRouter(prefix="/api")
+security = HTTPBearer()
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Health check endpoint for Render
-@app.get("/api/health")
-async def health_check():
-    return {"status": "healthy", "service": "finamily-api", "version": "1.0.0"}
+# Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# ==================== PYDANTIC MODELS ====================
 
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -59,6 +86,8 @@ class User(BaseModel):
     name: str
     is_admin: bool = False
     is_approved: bool = False
+    profile_photo: Optional[str] = None
+    preferences: Optional[dict] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
@@ -102,6 +131,7 @@ class Category(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     type: str
+    is_fixed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CategoryCreate(BaseModel):
@@ -116,8 +146,8 @@ class Transaction(BaseModel):
     amount: float
     type: str
     category_id: Optional[str] = None
-    member_id: str
-    bank_id: str
+    member_id: Optional[str] = None
+    bank_id: Optional[str] = None
     is_reserve_deposit: bool = False
     is_reserve_withdrawal: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -128,10 +158,22 @@ class TransactionCreate(BaseModel):
     amount: float
     type: str
     category_id: Optional[str] = None
-    member_id: str
-    bank_id: str
+    member_id: Optional[str] = None
+    bank_id: Optional[str] = None
     is_reserve_deposit: bool = False
     is_reserve_withdrawal: bool = False
+
+class TransactionUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    type: Optional[str] = None
+    category_id: Optional[str] = None
+    member_id: Optional[str] = None
+    bank_id: Optional[str] = None
+
+class BulkCategorize(BaseModel):
+    transaction_ids: List[str]
+    category_id: str
 
 class Goal(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -156,6 +198,30 @@ class GoalCreate(BaseModel):
 class GoalContribution(BaseModel):
     amount: float
 
+class CategorizationRuleCreate(BaseModel):
+    keyword: str
+    category_id: str
+    match_type: str = "contains"
+    is_active: bool = True
+    priority: int = 0
+
+class FamilyChallengeCreate(BaseModel):
+    name: str
+    description: str
+    target_amount: float
+    reward: str
+    deadline: Optional[datetime] = None
+    category_id: Optional[str] = None
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    profile_photo: Optional[str] = None
+    preferences: Optional[dict] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
 class DashboardSummary(BaseModel):
     previous_balance: float
     month_income: float
@@ -172,6 +238,16 @@ class MonthlyComparison(BaseModel):
     income: float
     expenses: float
 
+class HealthScore(BaseModel):
+    total_score: int
+    reserve_score: int
+    expense_ratio_score: int
+    consistency_score: int
+    goals_score: int
+    level: str
+    tips: List[str]
+
+# ==================== AUTH HELPERS ====================
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -184,762 +260,864 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
+def create_token(user_id: str) -> str:
+    expires = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    return jwt.encode({"sub": user_id, "exp": expires}, SECRET_KEY, algorithm=ALGORITHM)
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def row_to_dict(row) -> dict:
+    """Convert sqlite3 Row to dict"""
+    return dict(row) if row else None
+
+# ==================== HEALTH CHECK ====================
+
+@api_router.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "finamily-api", "version": "2.0.0", "database": "sqlite"}
+
+# ==================== AUTH ENDPOINTS ====================
+
 @api_router.post("/auth/register")
 async def register(user_data: UserCreate):
-    existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
-    
-    user_count = await db.users.count_documents({})
-    is_first_user = user_count == 0
-    
-    user = User(
-        email=user_data.email, 
-        name=user_data.name,
-        is_admin=is_first_user,
-        is_approved=is_first_user
-    )
-    user_dict = user.model_dump()
-    user_dict['timestamp'] = user_dict['created_at'].isoformat()
-    del user_dict['created_at']
-    user_dict['password'] = hashed_password.decode('utf-8')
-    
-    await db.users.insert_one(user_dict)
-    
-    if not is_first_user:
-        raise HTTPException(status_code=202, detail="Conta criada! Aguarde aprovação do administrador.")
-    
-    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    access_token = jwt.encode(
-        {"sub": user.id, "exp": datetime.now(timezone.utc) + access_token_expires},
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
-    
-    fixed_categories = [
-        {"name": "Reserva de Emergência", "type": "especial"},
-        {"name": "Alimentação", "type": "despesa"},
-        {"name": "Transporte", "type": "despesa"},
-        {"name": "Saúde", "type": "despesa"},
-        {"name": "Lazer", "type": "despesa"},
-        {"name": "Educação", "type": "despesa"},
-        {"name": "Moradia", "type": "despesa"},
-        {"name": "Salário", "type": "receita"},
-        {"name": "Freelance", "type": "receita"},
-    ]
-    
-    for cat_data in fixed_categories:
-        cat = Category(name=cat_data["name"], type=cat_data["type"])
-        cat_dict = cat.model_dump()
-        cat_dict['created_at'] = cat_dict['created_at'].isoformat()
-        cat_dict['user_id'] = user.id
-        cat_dict['is_fixed'] = True
-        await db.categories.insert_one(cat_dict)
-    
-    return Token(access_token=access_token, token_type="bearer", user=user)
+    async with get_db_context() as db:
+        # Check if email exists
+        cursor = await db.execute("SELECT id FROM users WHERE email = ?", (user_data.email,))
+        if await cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if first user
+        cursor = await db.execute("SELECT COUNT(*) as count FROM users")
+        row = await cursor.fetchone()
+        is_first_user = row['count'] == 0
+        
+        # Create user
+        user = User(
+            email=user_data.email,
+            name=user_data.name,
+            is_admin=is_first_user,
+            is_approved=is_first_user
+        )
+        
+        await db.execute('''
+            INSERT INTO users (id, email, name, password, is_admin, is_approved, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user.id, user.email, user.name, hash_password(user_data.password), 
+              int(user.is_admin), int(user.is_approved), user.created_at.isoformat()))
+        
+        # Create default categories for first user
+        if is_first_user:
+            default_categories = [
+                ("Reserva de Emergência", "especial", True),
+                ("Alimentação", "despesa", True),
+                ("Transporte", "despesa", True),
+                ("Saúde", "despesa", True),
+                ("Lazer", "despesa", True),
+                ("Educação", "despesa", True),
+                ("Moradia", "despesa", True),
+                ("Salário", "receita", True),
+                ("Freelance", "receita", True),
+            ]
+            for name, cat_type, is_fixed in default_categories:
+                cat_id = str(uuid.uuid4())
+                await db.execute('''
+                    INSERT INTO categories (id, user_id, name, type, is_fixed, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (cat_id, user.id, name, cat_type, int(is_fixed), datetime.now(timezone.utc).isoformat()))
+        
+        await db.commit()
+        
+        if not is_first_user:
+            raise HTTPException(status_code=202, detail="Conta criada! Aguarde aprovação do administrador.")
+        
+        return Token(access_token=create_token(user.id), token_type="bearer", user=user)
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(user_data: UserLogin):
-    user_doc = await db.users.find_one({"email": user_data.email}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    if not bcrypt.checkpw(user_data.password.encode('utf-8'), user_doc['password'].encode('utf-8')):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    if not user_doc.get('is_approved', False):
-        raise HTTPException(status_code=403, detail="Conta ainda não aprovada pelo administrador")
-    
-    user = User(
-        id=user_doc['id'],
-        email=user_doc['email'],
-        name=user_doc['name'],
-        is_admin=user_doc.get('is_admin', False),
-        is_approved=user_doc.get('is_approved', False),
-        created_at=datetime.fromisoformat(user_doc['timestamp']) if isinstance(user_doc.get('timestamp'), str) else user_doc.get('created_at')
-    )
-    
-    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    access_token = jwt.encode(
-        {"sub": user.id, "exp": datetime.now(timezone.utc) + access_token_expires},
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
-    
-    return Token(access_token=access_token, token_type="bearer", user=user)
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM users WHERE email = ?", (user_data.email,))
+        row = await cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        user_dict = row_to_dict(row)
+        
+        if not verify_password(user_data.password, user_dict['password']):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        if not user_dict['is_approved']:
+            raise HTTPException(status_code=403, detail="Conta aguardando aprovação do administrador")
+        
+        user = User(
+            id=user_dict['id'],
+            email=user_dict['email'],
+            name=user_dict['name'],
+            is_admin=bool(user_dict['is_admin']),
+            is_approved=bool(user_dict['is_approved']),
+            profile_photo=user_dict.get('profile_photo'),
+            preferences=json.loads(user_dict['preferences']) if user_dict.get('preferences') else None
+        )
+        
+        return Token(access_token=create_token(user.id), token_type="bearer", user=user)
 
-async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    user_id = await verify_token(credentials)
-    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
-    if not user_doc or not user_doc.get('is_admin', False):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user_id
+# ==================== ADMIN ENDPOINTS ====================
 
 @api_router.get("/admin/users")
-async def get_all_users(user_id: str = Depends(verify_admin)):
-    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
-    return users
+async def get_all_users(user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        # Check if admin
+        cursor = await db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row or not row['is_admin']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        cursor = await db.execute("SELECT id, email, name, is_admin, is_approved, created_at FROM users")
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
 
-@api_router.post("/admin/users/{user_email}/approve")
-async def approve_user(user_email: str, admin_id: str = Depends(verify_admin)):
-    result = await db.users.update_one(
-        {"email": user_email},
-        {"$set": {"is_approved": True}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User approved successfully"}
+@api_router.post("/admin/approve/{target_user_id}")
+async def approve_user(target_user_id: str, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row or not row['is_admin']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        await db.execute("UPDATE users SET is_approved = 1 WHERE id = ?", (target_user_id,))
+        
+        # Create default categories for approved user
+        cursor = await db.execute("SELECT id FROM categories WHERE user_id = ?", (target_user_id,))
+        if not await cursor.fetchone():
+            default_categories = [
+                ("Reserva de Emergência", "especial", True),
+                ("Alimentação", "despesa", True),
+                ("Transporte", "despesa", True),
+                ("Saúde", "despesa", True),
+                ("Lazer", "despesa", True),
+                ("Educação", "despesa", True),
+                ("Moradia", "despesa", True),
+                ("Salário", "receita", True),
+                ("Freelance", "receita", True),
+            ]
+            for name, cat_type, is_fixed in default_categories:
+                cat_id = str(uuid.uuid4())
+                await db.execute('''
+                    INSERT INTO categories (id, user_id, name, type, is_fixed, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (cat_id, target_user_id, name, cat_type, int(is_fixed), datetime.now(timezone.utc).isoformat()))
+        
+        await db.commit()
+        return {"message": "User approved successfully"}
 
-@api_router.delete("/admin/users/{user_email}")
-async def delete_user(user_email: str, admin_id: str = Depends(verify_admin)):
-    result = await db.users.delete_one({"email": user_email})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User deleted successfully"}
+@api_router.post("/admin/reject/{target_user_id}")
+async def reject_user(target_user_id: str, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row or not row['is_admin']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        await db.execute("DELETE FROM users WHERE id = ? AND is_approved = 0", (target_user_id,))
+        await db.commit()
+        return {"message": "User rejected"}
 
-class PasswordReset(BaseModel):
-    new_password: str
+@api_router.post("/admin/reset-password/{target_user_id}")
+async def admin_reset_password(target_user_id: str, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row or not row['is_admin']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        new_password = "Reset@2025"
+        await db.execute("UPDATE users SET password = ? WHERE id = ?", 
+                        (hash_password(new_password), target_user_id))
+        await db.commit()
+        return {"message": f"Password reset to: {new_password}"}
 
-@api_router.post("/admin/users/{user_email}/reset-password")
-async def reset_user_password(user_email: str, data: PasswordReset, admin_id: str = Depends(verify_admin)):
-    hashed_password = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt())
-    
-    result = await db.users.update_one(
-        {"email": user_email},
-        {"$set": {"password": hashed_password.decode('utf-8')}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"message": f"Password reset successfully for {user_email}"}
+# ==================== FAMILY MEMBERS ====================
 
-# Goals endpoints
-@api_router.post("/goals", response_model=Goal)
-async def create_goal(goal: GoalCreate, user_id: str = Depends(verify_token)):
-    goal_obj = Goal(**goal.model_dump())
-    doc = goal_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    if doc.get('deadline'):
-        doc['deadline'] = doc['deadline'].isoformat()
-    doc['user_id'] = user_id
-    await db.goals.insert_one(doc)
-    return goal_obj
-
-@api_router.get("/goals", response_model=List[Goal])
-async def get_goals(user_id: str = Depends(verify_token)):
-    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for goal in goals:
-        if isinstance(goal['created_at'], str):
-            goal['created_at'] = datetime.fromisoformat(goal['created_at'])
-        if goal.get('deadline') and isinstance(goal['deadline'], str):
-            goal['deadline'] = datetime.fromisoformat(goal['deadline'])
-    return goals
-
-@api_router.put("/goals/{goal_id}", response_model=Goal)
-async def update_goal(goal_id: str, goal: GoalCreate, user_id: str = Depends(verify_token)):
-    update_data = goal.model_dump()
-    if update_data.get('deadline'):
-        update_data['deadline'] = update_data['deadline'].isoformat()
-    
-    result = await db.goals.update_one(
-        {"id": goal_id, "user_id": user_id},
-        {"$set": update_data}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    
-    updated = await db.goals.find_one({"id": goal_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    if updated.get('deadline') and isinstance(updated['deadline'], str):
-        updated['deadline'] = datetime.fromisoformat(updated['deadline'])
-    
-    return Goal(**updated)
-
-@api_router.post("/goals/{goal_id}/contribute")
-async def add_goal_contribution(goal_id: str, contribution: GoalContribution, user_id: str = Depends(verify_token)):
-    result = await db.goals.update_one(
-        {"id": goal_id, "user_id": user_id},
-        {"$inc": {"current_amount": contribution.amount}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    
-    updated = await db.goals.find_one({"id": goal_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    if updated.get('deadline') and isinstance(updated['deadline'], str):
-        updated['deadline'] = datetime.fromisoformat(updated['deadline'])
-    
-    return Goal(**updated)
-
-@api_router.delete("/goals/{goal_id}")
-async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
-    result = await db.goals.delete_one({"id": goal_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    return {"message": "Goal deleted successfully"}
-
-# Continue with remaining endpoints...
-
-# Family endpoints
-@api_router.post("/family", response_model=FamilyMember)
-async def create_family_member(member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
-    member_obj = FamilyMember(**member.model_dump())
-    doc = member_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['user_id'] = user_id
-    await db.family_members.insert_one(doc)
-    return member_obj
-
-@api_router.get("/family", response_model=List[FamilyMember])
+@api_router.get("/family")
 async def get_family_members(user_id: str = Depends(verify_token)):
-    members = await db.family_members.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for member in members:
-        if isinstance(member['created_at'], str):
-            member['created_at'] = datetime.fromisoformat(member['created_at'])
-    return members
+    async with get_db_context() as db:
+        cursor = await db.execute(
+            "SELECT id, name, profile, created_at FROM family_members WHERE user_id = ?", 
+            (user_id,)
+        )
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
 
-@api_router.put("/family/{member_id}", response_model=FamilyMember)
+@api_router.post("/family")
+async def create_family_member(member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        member_obj = FamilyMember(**member.model_dump())
+        await db.execute('''
+            INSERT INTO family_members (id, user_id, name, profile, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (member_obj.id, user_id, member_obj.name, member_obj.profile, 
+              member_obj.created_at.isoformat()))
+        await db.commit()
+        return member_obj
+
+@api_router.put("/family/{member_id}")
 async def update_family_member(member_id: str, member: FamilyMemberCreate, user_id: str = Depends(verify_token)):
-    result = await db.family_members.update_one({"id": member_id, "user_id": user_id}, {"$set": member.model_dump()})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Member not found")
-    updated = await db.family_members.find_one({"id": member_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    return FamilyMember(**updated)
+    async with get_db_context() as db:
+        await db.execute(
+            "UPDATE family_members SET name = ?, profile = ? WHERE id = ? AND user_id = ?",
+            (member.name, member.profile, member_id, user_id)
+        )
+        await db.commit()
+        cursor = await db.execute(
+            "SELECT id, name, profile, created_at FROM family_members WHERE id = ?", 
+            (member_id,)
+        )
+        row = await cursor.fetchone()
+        return row_to_dict(row)
 
 @api_router.delete("/family/{member_id}")
 async def delete_family_member(member_id: str, user_id: str = Depends(verify_token)):
-    result = await db.family_members.delete_one({"id": member_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Member not found")
-    return {"message": "Member deleted successfully"}
+    async with get_db_context() as db:
+        await db.execute("DELETE FROM family_members WHERE id = ? AND user_id = ?", (member_id, user_id))
+        await db.commit()
+        return {"message": "Member deleted"}
 
-# Banks endpoints
-@api_router.post("/banks", response_model=Bank)
-async def create_bank(bank: BankCreate, user_id: str = Depends(verify_token)):
-    bank_obj = Bank(**bank.model_dump())
-    doc = bank_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['user_id'] = user_id
-    await db.banks.insert_one(doc)
-    return bank_obj
+# ==================== BANKS ====================
 
-@api_router.get("/banks", response_model=List[Bank])
+@api_router.get("/banks")
 async def get_banks(user_id: str = Depends(verify_token)):
-    banks = await db.banks.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for bank in banks:
-        if isinstance(bank['created_at'], str):
-            bank['created_at'] = datetime.fromisoformat(bank['created_at'])
-    return banks
+    async with get_db_context() as db:
+        cursor = await db.execute(
+            "SELECT id, name, active, created_at FROM banks WHERE user_id = ?", 
+            (user_id,)
+        )
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
 
-@api_router.put("/banks/{bank_id}", response_model=Bank)
+@api_router.post("/banks")
+async def create_bank(bank: BankCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        bank_obj = Bank(**bank.model_dump())
+        await db.execute('''
+            INSERT INTO banks (id, user_id, name, active, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (bank_obj.id, user_id, bank_obj.name, int(bank_obj.active), 
+              bank_obj.created_at.isoformat()))
+        await db.commit()
+        return bank_obj
+
+@api_router.put("/banks/{bank_id}")
 async def update_bank(bank_id: str, bank: BankCreate, user_id: str = Depends(verify_token)):
-    result = await db.banks.update_one({"id": bank_id, "user_id": user_id}, {"$set": bank.model_dump()})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Bank not found")
-    updated = await db.banks.find_one({"id": bank_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    return Bank(**updated)
+    async with get_db_context() as db:
+        await db.execute(
+            "UPDATE banks SET name = ?, active = ? WHERE id = ? AND user_id = ?",
+            (bank.name, int(bank.active), bank_id, user_id)
+        )
+        await db.commit()
+        cursor = await db.execute("SELECT id, name, active, created_at FROM banks WHERE id = ?", (bank_id,))
+        row = await cursor.fetchone()
+        return row_to_dict(row)
 
 @api_router.delete("/banks/{bank_id}")
 async def delete_bank(bank_id: str, user_id: str = Depends(verify_token)):
-    result = await db.banks.delete_one({"id": bank_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Bank not found")
-    return {"message": "Bank deleted successfully"}
+    async with get_db_context() as db:
+        await db.execute("DELETE FROM banks WHERE id = ? AND user_id = ?", (bank_id, user_id))
+        await db.commit()
+        return {"message": "Bank deleted"}
 
-# Categories endpoints
-@api_router.post("/categories", response_model=Category)
-async def create_category(category: CategoryCreate, user_id: str = Depends(verify_token)):
-    category_obj = Category(**category.model_dump())
-    doc = category_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['user_id'] = user_id
-    await db.categories.insert_one(doc)
-    return category_obj
+# ==================== CATEGORIES ====================
 
-@api_router.get("/categories", response_model=List[Category])
+@api_router.get("/categories")
 async def get_categories(user_id: str = Depends(verify_token)):
-    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for category in categories:
-        if isinstance(category['created_at'], str):
-            category['created_at'] = datetime.fromisoformat(category['created_at'])
-    return categories
+    async with get_db_context() as db:
+        cursor = await db.execute(
+            "SELECT id, name, type, is_fixed, created_at FROM categories WHERE user_id = ?", 
+            (user_id,)
+        )
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
 
-@api_router.put("/categories/{category_id}", response_model=Category)
+@api_router.post("/categories")
+async def create_category(category: CategoryCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cat_obj = Category(**category.model_dump())
+        await db.execute('''
+            INSERT INTO categories (id, user_id, name, type, is_fixed, created_at)
+            VALUES (?, ?, ?, ?, 0, ?)
+        ''', (cat_obj.id, user_id, cat_obj.name, cat_obj.type, cat_obj.created_at.isoformat()))
+        await db.commit()
+        return cat_obj
+
+@api_router.put("/categories/{category_id}")
 async def update_category(category_id: str, category: CategoryCreate, user_id: str = Depends(verify_token)):
-    result = await db.categories.update_one({"id": category_id, "user_id": user_id}, {"$set": category.model_dump()})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Category not found")
-    updated = await db.categories.find_one({"id": category_id}, {"_id": 0})
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    return Category(**updated)
+    async with get_db_context() as db:
+        await db.execute(
+            "UPDATE categories SET name = ?, type = ? WHERE id = ? AND user_id = ? AND is_fixed = 0",
+            (category.name, category.type, category_id, user_id)
+        )
+        await db.commit()
+        cursor = await db.execute(
+            "SELECT id, name, type, is_fixed, created_at FROM categories WHERE id = ?", 
+            (category_id,)
+        )
+        row = await cursor.fetchone()
+        return row_to_dict(row)
 
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, user_id: str = Depends(verify_token)):
-    result = await db.categories.delete_one({"id": category_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Category not found")
-    return {"message": "Category deleted successfully"}
+    async with get_db_context() as db:
+        await db.execute(
+            "DELETE FROM categories WHERE id = ? AND user_id = ? AND is_fixed = 0", 
+            (category_id, user_id)
+        )
+        await db.commit()
+        return {"message": "Category deleted"}
 
-# Continue on next message due to length...
+# ==================== TRANSACTIONS ====================
 
-# Transactions endpoints
-@api_router.post("/transactions/import")
-async def import_transactions(file: UploadFile = File(...), member_id: str = Form(...), bank_id: str = Form(...), user_id: str = Depends(verify_token)):
-    content = await file.read()
-    file_extension = file.filename.lower().split('.')[-1] if file.filename else ''
-    transactions, duplicates_count = [], 0
-    
-    try:
-        if file_extension == 'csv':
-            csv_content = content.decode('utf-8')
-            lines = csv_content.split('\n')
-            data_start = 0
-            for i, line in enumerate(lines):
-                if 'Data' in line and ('Lançamento' in line or 'Lancamento' in line or 'Valor' in line):
-                    data_start = i
-                    break
-            csv_data = '\n'.join(lines[data_start:])
-            delimiter = ';' if ';' in csv_data.split('\n')[0] else ','
-            csv_reader = csv.DictReader(io.StringIO(csv_data), delimiter=delimiter)
-            
-            for row in csv_reader:
-                try:
-                    date_str = (row.get('Data Lançamento') or row.get('Data Lancamento') or row.get('Data') or row.get('date') or row.get('Date') or row.get('DATA') or '').strip()
-                    description = (row.get('Descrição') or row.get('Descricao') or row.get('Histórico') or row.get('Historico') or row.get('description') or row.get('Description') or row.get('DESCRICAO') or 'N/A').strip()
-                    amount_str = (row.get('Valor') or row.get('amount') or row.get('Amount') or row.get('VALOR') or '0').strip()
-                    
-                    if not amount_str or amount_str == '0':
-                        continue
-                    
-                    amount_str = amount_str.replace('R$', '').replace('$', '').replace(' ', '')
-                    if ',' in amount_str:
-                        parts = amount_str.rsplit(',', 1)
-                        integer_part = parts[0].replace('.', '')
-                        decimal_part = parts[1] if len(parts) > 1 else '00'
-                        amount_str = f"{integer_part}.{decimal_part}"
-                    
-                    amount = float(amount_str)
-                    trans_type = 'receita' if amount > 0 else 'despesa'
-                    trans_date = datetime.now(timezone.utc)
-                    
-                    if date_str:
-                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-                            try:
-                                trans_date = datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
-                                break
-                            except ValueError:
-                                continue
-                    
-                    existing = await db.transactions.find_one({"user_id": user_id, "date": trans_date.isoformat(), "description": description, "amount": abs(amount), "member_id": member_id, "bank_id": bank_id})
-                    if existing:
-                        duplicates_count += 1
-                        continue
-                    
-                    transaction = Transaction(date=trans_date, description=description, amount=abs(amount), type=trans_type, member_id=member_id, bank_id=bank_id)
-                    transactions.append(transaction)
-                except Exception as e:
-                    logging.error(f"Error parsing CSV row: {e}")
-                    continue
+@api_router.get("/transactions")
+async def get_transactions(
+    month: Optional[int] = None, 
+    year: Optional[int] = None,
+    category_id: Optional[str] = None,
+    user_id: str = Depends(verify_token)
+):
+    async with get_db_context() as db:
+        query = "SELECT * FROM transactions WHERE user_id = ?"
+        params = [user_id]
         
-        elif file_extension == 'ofx':
-            ofx = OfxParser.parse(io.BytesIO(content))
-            for account in ofx.accounts:
-                for trans in account.statement.transactions:
-                    amount = float(trans.amount)
-                    trans_type = 'receita' if amount > 0 else 'despesa'
-                    trans_date = trans.date.replace(tzinfo=timezone.utc) if trans.date else datetime.now(timezone.utc)
-                    description = trans.memo or trans.payee or 'N/A'
-                    
-                    existing = await db.transactions.find_one({"user_id": user_id, "date": trans_date.isoformat(), "description": description, "amount": abs(amount), "member_id": member_id, "bank_id": bank_id})
-                    if existing:
-                        duplicates_count += 1
-                        continue
-                    
-                    transaction = Transaction(date=trans_date, description=description, amount=abs(amount), type=trans_type, member_id=member_id, bank_id=bank_id)
-                    transactions.append(transaction)
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file format")
+        if category_id:
+            query += " AND category_id = ?"
+            params.append(category_id)
         
-        auto_categorized = 0
-        if transactions:
-            docs = []
-            for trans in transactions:
-                doc = trans.model_dump()
-                doc['date'] = doc['date'].isoformat()
-                doc['created_at'] = doc['created_at'].isoformat()
-                doc['user_id'] = user_id
-                
-                # Apply categorization rules
-                category_id = await apply_categorization_rules(trans.description, user_id)
-                if category_id:
-                    doc['category_id'] = category_id
-                    auto_categorized += 1
-                
-                docs.append(doc)
-            await db.transactions.insert_many(docs)
+        query += " ORDER BY date DESC"
         
-        message = f"Successfully imported {len(transactions)} new transactions"
-        if duplicates_count > 0:
-            message += f" ({duplicates_count} duplicates skipped)"
-        if auto_categorized > 0:
-            message += f" ({auto_categorized} auto-categorized)"
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+        transactions = [row_to_dict(r) for r in rows]
         
-        return {"message": message, "count": len(transactions), "duplicates": duplicates_count, "auto_categorized": auto_categorized, "total_processed": len(transactions) + duplicates_count}
-    except Exception as e:
-        logging.error(f"Error importing: {e}")
-        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+        # Filter by month/year in Python (SQLite date handling)
+        if month and year:
+            transactions = [
+                t for t in transactions 
+                if datetime.fromisoformat(t['date']).month == month 
+                and datetime.fromisoformat(t['date']).year == year
+            ]
+        
+        return transactions
 
-@api_router.get("/transactions", response_model=List[Transaction])
-async def get_transactions(month: Optional[int] = None, year: Optional[int] = None, user_id: str = Depends(verify_token)):
-    query = {"user_id": user_id}
-    transactions = await db.transactions.find(query, {"_id": 0}).to_list(10000)
-    for trans in transactions:
-        if isinstance(trans['date'], str):
-            trans['date'] = datetime.fromisoformat(trans['date'])
-        if isinstance(trans['created_at'], str):
-            trans['created_at'] = datetime.fromisoformat(trans['created_at'])
-    if month and year:
-        transactions = [t for t in transactions if t['date'].month == month and t['date'].year == year]
-    return sorted(transactions, key=lambda x: x['date'], reverse=True)
+@api_router.post("/transactions")
+async def create_transaction(transaction: TransactionCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        trans_obj = Transaction(**transaction.model_dump())
+        await db.execute('''
+            INSERT INTO transactions (id, user_id, date, description, amount, type, 
+                category_id, member_id, bank_id, is_reserve_deposit, is_reserve_withdrawal, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (trans_obj.id, user_id, trans_obj.date.isoformat(), trans_obj.description,
+              trans_obj.amount, trans_obj.type, trans_obj.category_id, trans_obj.member_id,
+              trans_obj.bank_id, int(trans_obj.is_reserve_deposit), 
+              int(trans_obj.is_reserve_withdrawal), trans_obj.created_at.isoformat()))
+        await db.commit()
+        return trans_obj
 
-@api_router.get("/transactions/{transaction_id}", response_model=Transaction)
-async def get_transaction(transaction_id: str, user_id: str = Depends(verify_token)):
-    trans = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
-    if not trans:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    if isinstance(trans['date'], str):
-        trans['date'] = datetime.fromisoformat(trans['date'])
-    if isinstance(trans['created_at'], str):
-        trans['created_at'] = datetime.fromisoformat(trans['created_at'])
-    return Transaction(**trans)
-
-@api_router.put("/transactions/{transaction_id}", response_model=Transaction)
-async def update_transaction(transaction_id: str, transaction: TransactionCreate, user_id: str = Depends(verify_token)):
-    update_data = transaction.model_dump()
-    update_data['date'] = update_data['date'].isoformat()
-    result = await db.transactions.update_one({"id": transaction_id, "user_id": user_id}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    updated = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
-    if isinstance(updated['date'], str):
-        updated['date'] = datetime.fromisoformat(updated['date'])
-    if isinstance(updated['created_at'], str):
-        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
-    return Transaction(**updated)
+@api_router.put("/transactions/{transaction_id}")
+async def update_transaction(transaction_id: str, transaction: TransactionUpdate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        updates = []
+        params = []
+        
+        update_dict = transaction.model_dump(exclude_unset=True)
+        for key, value in update_dict.items():
+            if value is not None:
+                updates.append(f"{key} = ?")
+                params.append(value)
+        
+        if updates:
+            params.extend([transaction_id, user_id])
+            await db.execute(
+                f"UPDATE transactions SET {', '.join(updates)} WHERE id = ? AND user_id = ?",
+                params
+            )
+            await db.commit()
+        
+        cursor = await db.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,))
+        row = await cursor.fetchone()
+        return row_to_dict(row)
 
 @api_router.delete("/transactions/{transaction_id}")
 async def delete_transaction(transaction_id: str, user_id: str = Depends(verify_token)):
-    result = await db.transactions.delete_one({"id": transaction_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return {"message": "Transaction deleted successfully"}
-
-class BulkCategorizeRequest(BaseModel):
-    transaction_ids: List[str]
-    category_id: str
+    async with get_db_context() as db:
+        await db.execute("DELETE FROM transactions WHERE id = ? AND user_id = ?", (transaction_id, user_id))
+        await db.commit()
+        return {"message": "Transaction deleted"}
 
 @api_router.post("/transactions/bulk-categorize")
-async def bulk_categorize_transactions(data: BulkCategorizeRequest, user_id: str = Depends(verify_token)):
-    result = await db.transactions.update_many({"id": {"$in": data.transaction_ids}, "user_id": user_id}, {"$set": {"category_id": data.category_id}})
-    return {"message": f"Successfully categorized {result.modified_count} transactions", "count": result.modified_count}
+async def bulk_categorize(data: BulkCategorize, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        for trans_id in data.transaction_ids:
+            await db.execute(
+                "UPDATE transactions SET category_id = ? WHERE id = ? AND user_id = ?",
+                (data.category_id, trans_id, user_id)
+            )
+        await db.commit()
+        return {"message": f"Updated {len(data.transaction_ids)} transactions"}
 
-@api_router.post("/transactions/{transaction_id}/mark-reserve")
-async def mark_as_reserve(transaction_id: str, is_deposit: bool, user_id: str = Depends(verify_token)):
-    result = await db.transactions.update_one({"id": transaction_id, "user_id": user_id}, {"$set": {"is_reserve_deposit": is_deposit if is_deposit else False, "is_reserve_withdrawal": not is_deposit if not is_deposit else False}})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return {"message": "Transaction marked successfully"}
+@api_router.delete("/transactions/delete-all")
+async def delete_all_transactions(user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT COUNT(*) as count FROM transactions WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        count = row['count']
+        
+        await db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
+        await db.commit()
+        return {"message": f"Todas as {count} transações foram excluídas", "count": count}
 
-@api_router.get("/dashboard/emergency-reserve")
-async def get_emergency_reserve(user_id: str = Depends(verify_token)):
-    # Buscar a categoria "Reserva de Emergência"
-    reserve_category = await db.categories.find_one({"user_id": user_id, "name": "Reserva de Emergência"}, {"_id": 0})
-    reserve_category_id = reserve_category['id'] if reserve_category else None
-    
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    
-    total = 0
-    for trans in transactions:
-        # Método 1: Via flags is_reserve_deposit/is_reserve_withdrawal
-        if trans.get('is_reserve_deposit'):
-            total += trans['amount']
-        elif trans.get('is_reserve_withdrawal'):
-            total -= trans['amount']
-        # Método 2: Via categoria "Reserva de Emergência"
-        elif reserve_category_id and trans.get('category_id') == reserve_category_id:
-            # Se é receita na categoria reserva, adiciona. Se é despesa, subtrai
-            if trans.get('type') == 'receita':
-                total += trans['amount']
-            else:
-                total -= trans['amount']
-    
-    return {"total": total}
+# ==================== IMPORT ====================
 
-@api_router.get("/dashboard/summary", response_model=DashboardSummary)
-async def get_dashboard_summary(month: int, year: int, user_id: str = Depends(verify_token)):
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    for trans in transactions:
-        if isinstance(trans['date'], str):
-            trans['date'] = datetime.fromisoformat(trans['date'])
-    current_month_trans = [t for t in transactions if t['date'].month == month and t['date'].year == year]
-    previous_month = month - 1 if month > 1 else 12
-    previous_year = year if month > 1 else year - 1
-    previous_trans = [t for t in transactions if (t['date'].year < previous_year) or (t['date'].year == previous_year and t['date'].month < previous_month) or (t['date'].year == previous_year and t['date'].month == previous_month)]
-    previous_balance = sum(t['amount'] if t['type'] == 'receita' else -t['amount'] for t in previous_trans)
-    month_income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
-    month_expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
-    return DashboardSummary(previous_balance=previous_balance, month_income=month_income, month_expenses=month_expenses, final_balance=previous_balance + month_income - month_expenses)
-
-@api_router.get("/dashboard/category-chart", response_model=List[CategoryChart])
-async def get_category_chart(month: int, year: int, user_id: str = Depends(verify_token)):
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    category_map = {c['id']: c['name'] for c in categories}
-    for trans in transactions:
-        if isinstance(trans['date'], str):
-            trans['date'] = datetime.fromisoformat(trans['date'])
-    current_month_trans = [t for t in transactions if t['date'].month == month and t['date'].year == year and t['type'] == 'despesa']
-    category_totals = {}
-    for trans in current_month_trans:
-        cat_id = trans.get('category_id')
-        cat_name = category_map.get(cat_id, 'Sem Categoria') if cat_id else 'Sem Categoria'
-        category_totals[cat_name] = category_totals.get(cat_name, 0) + trans['amount']
-    total = sum(category_totals.values())
-    result = [CategoryChart(category=cat, amount=amount, percentage=round((amount/total*100) if total > 0 else 0, 2)) for cat, amount in category_totals.items()]
-    return sorted(result, key=lambda x: x.amount, reverse=True)
-
-@api_router.get("/dashboard/monthly-comparison", response_model=List[MonthlyComparison])
-async def get_monthly_comparison(year: int, user_id: str = Depends(verify_token)):
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    for trans in transactions:
-        if isinstance(trans['date'], str):
-            trans['date'] = datetime.fromisoformat(trans['date'])
-    year_trans = [t for t in transactions if t['date'].year == year]
-    month_names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    result = []
-    for month_num in range(1, 13):
-        month_trans = [t for t in year_trans if t['date'].month == month_num]
-        income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
-        expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
-        result.append(MonthlyComparison(month=month_names[month_num-1], income=income, expenses=expenses))
-    return result
-
-# ==================== CATEGORIZATION RULES MODELS ====================
-
-class CategorizationRule(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    keyword: str  # palavra-chave para buscar na descrição
-    category_id: str  # categoria a ser aplicada
-    match_type: str = "contains"  # "contains", "starts_with", "exact"
-    is_active: bool = True
-    priority: int = 0  # regras com maior prioridade são aplicadas primeiro
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class CategorizationRuleCreate(BaseModel):
-    keyword: str
-    category_id: str
-    match_type: str = "contains"
-    is_active: bool = True
-    priority: int = 0
-
-# ==================== CATEGORIZATION RULES ENDPOINTS ====================
-
-@api_router.post("/categorization-rules")
-async def create_categorization_rule(rule: CategorizationRuleCreate, user_id: str = Depends(verify_token)):
-    """Create a new categorization rule"""
-    rule_obj = CategorizationRule(**rule.model_dump())
-    doc = rule_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['user_id'] = user_id
-    await db.categorization_rules.insert_one(doc)
-    return rule_obj
-
-@api_router.get("/categorization-rules")
-async def get_categorization_rules(user_id: str = Depends(verify_token)):
-    """Get all categorization rules for the user"""
-    rules = await db.categorization_rules.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for rule in rules:
-        if isinstance(rule.get('created_at'), str):
-            rule['created_at'] = datetime.fromisoformat(rule['created_at'])
-    return sorted(rules, key=lambda x: x.get('priority', 0), reverse=True)
-
-@api_router.put("/categorization-rules/{rule_id}")
-async def update_categorization_rule(rule_id: str, rule: CategorizationRuleCreate, user_id: str = Depends(verify_token)):
-    """Update a categorization rule"""
-    update_data = rule.model_dump()
-    result = await db.categorization_rules.update_one(
-        {"id": rule_id, "user_id": user_id},
-        {"$set": update_data}
+async def apply_categorization_rules(description: str, user_id: str, db) -> Optional[str]:
+    """Apply categorization rules to find matching category"""
+    cursor = await db.execute(
+        "SELECT keyword, category_id, match_type FROM categorization_rules WHERE user_id = ? AND is_active = 1 ORDER BY priority DESC",
+        (user_id,)
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    updated = await db.categorization_rules.find_one({"id": rule_id}, {"_id": 0})
-    return updated
-
-@api_router.delete("/categorization-rules/{rule_id}")
-async def delete_categorization_rule(rule_id: str, user_id: str = Depends(verify_token)):
-    """Delete a categorization rule"""
-    result = await db.categorization_rules.delete_one({"id": rule_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    return {"message": "Rule deleted successfully"}
-
-async def apply_categorization_rules(description: str, user_id: str) -> Optional[str]:
-    """Apply categorization rules to a transaction description and return category_id if matched"""
-    rules = await db.categorization_rules.find(
-        {"user_id": user_id, "is_active": True}, 
-        {"_id": 0}
-    ).to_list(1000)
-    
-    # Sort by priority (highest first)
-    rules = sorted(rules, key=lambda x: x.get('priority', 0), reverse=True)
+    rules = await cursor.fetchall()
     
     description_lower = description.lower()
     
     for rule in rules:
         keyword_lower = rule['keyword'].lower()
-        match_type = rule.get('match_type', 'contains')
+        match_type = rule['match_type']
         
-        matched = False
-        if match_type == 'contains':
-            matched = keyword_lower in description_lower
-        elif match_type == 'starts_with':
-            matched = description_lower.startswith(keyword_lower)
-        elif match_type == 'exact':
-            matched = description_lower == keyword_lower
-        
-        if matched:
+        if match_type == 'contains' and keyword_lower in description_lower:
+            return rule['category_id']
+        elif match_type == 'starts_with' and description_lower.startswith(keyword_lower):
+            return rule['category_id']
+        elif match_type == 'exact' and description_lower == keyword_lower:
             return rule['category_id']
     
     return None
 
-# ==================== END CATEGORIZATION RULES ====================
+@api_router.post("/transactions/import")
+async def import_transactions(
+    file: UploadFile = File(...),
+    member_id: str = Form(...),
+    bank_id: str = Form(...),
+    user_id: str = Depends(verify_token)
+):
+    async with get_db_context() as db:
+        content = await file.read()
+        filename = file.filename.lower()
+        
+        transactions = []
+        duplicates_count = 0
+        auto_categorized = 0
+        
+        # Get existing hashes for duplicate detection
+        cursor = await db.execute(
+            "SELECT unique_hash FROM transactions WHERE user_id = ?", (user_id,)
+        )
+        existing_hashes = {row['unique_hash'] for row in await cursor.fetchall() if row['unique_hash']}
+        
+        if filename.endswith('.csv'):
+            try:
+                text_content = content.decode('utf-8')
+            except UnicodeDecodeError:
+                text_content = content.decode('latin-1')
+            
+            reader = csv.DictReader(io.StringIO(text_content), delimiter=';')
+            
+            for row in reader:
+                date_str = row.get('Data Lançamento') or row.get('Data') or row.get('date', '')
+                description = row.get('Descrição') or row.get('description', '')
+                amount_str = row.get('Valor') or row.get('amount', '0')
+                
+                if not description:
+                    continue
+                
+                # Parse amount
+                amount_str = str(amount_str).replace('R$', '').replace('.', '').replace(',', '.').strip()
+                try:
+                    amount = float(amount_str)
+                except ValueError:
+                    continue
+                
+                # Parse date
+                trans_date = datetime.now(timezone.utc)
+                if date_str:
+                    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+                        try:
+                            trans_date = datetime.strptime(date_str.strip(), fmt).replace(tzinfo=timezone.utc)
+                            break
+                        except ValueError:
+                            continue
+                
+                # Determine type
+                trans_type = 'despesa' if amount < 0 else 'receita'
+                
+                # Create unique hash
+                unique_hash = hashlib.md5(
+                    f"{trans_date.date()}{description}{abs(amount)}".encode()
+                ).hexdigest()
+                
+                if unique_hash in existing_hashes:
+                    duplicates_count += 1
+                    continue
+                
+                existing_hashes.add(unique_hash)
+                
+                # Apply categorization rules
+                category_id = await apply_categorization_rules(description, user_id, db)
+                if category_id:
+                    auto_categorized += 1
+                
+                trans_id = str(uuid.uuid4())
+                transactions.append({
+                    'id': trans_id,
+                    'user_id': user_id,
+                    'date': trans_date.isoformat(),
+                    'description': description,
+                    'amount': abs(amount),
+                    'type': trans_type,
+                    'category_id': category_id,
+                    'member_id': member_id,
+                    'bank_id': bank_id,
+                    'unique_hash': unique_hash,
+                    'created_at': datetime.now(timezone.utc).isoformat()
+                })
+        
+        # Insert transactions
+        for trans in transactions:
+            await db.execute('''
+                INSERT INTO transactions (id, user_id, date, description, amount, type, 
+                    category_id, member_id, bank_id, unique_hash, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (trans['id'], trans['user_id'], trans['date'], trans['description'],
+                  trans['amount'], trans['type'], trans['category_id'], trans['member_id'],
+                  trans['bank_id'], trans['unique_hash'], trans['created_at']))
+        
+        await db.commit()
+        
+        message = f"Importadas {len(transactions)} transações"
+        if duplicates_count > 0:
+            message += f" ({duplicates_count} duplicatas ignoradas)"
+        if auto_categorized > 0:
+            message += f" ({auto_categorized} auto-categorizadas)"
+        
+        return {
+            "message": message,
+            "count": len(transactions),
+            "duplicates": duplicates_count,
+            "auto_categorized": auto_categorized
+        }
 
-# ==================== GAMIFICATION MODELS ====================
+# ==================== DASHBOARD ====================
 
-class Badge(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    description: str
-    icon: str  # emoji or icon name
-    criteria: str  # how to earn this badge
-    unlocked: bool = False
-    unlocked_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+@api_router.get("/dashboard/summary")
+async def get_dashboard_summary(month: int, year: int, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM transactions WHERE user_id = ?", (user_id,))
+        all_transactions = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        # Parse dates and filter
+        for t in all_transactions:
+            t['date_obj'] = datetime.fromisoformat(t['date'])
+        
+        # Previous balance (all transactions before this month)
+        previous_trans = [t for t in all_transactions 
+                        if (t['date_obj'].year < year) or 
+                           (t['date_obj'].year == year and t['date_obj'].month < month)]
+        previous_income = sum(t['amount'] for t in previous_trans if t['type'] == 'receita')
+        previous_expenses = sum(t['amount'] for t in previous_trans if t['type'] == 'despesa')
+        previous_balance = previous_income - previous_expenses
+        
+        # Current month
+        current_trans = [t for t in all_transactions 
+                        if t['date_obj'].year == year and t['date_obj'].month == month]
+        month_income = sum(t['amount'] for t in current_trans if t['type'] == 'receita')
+        month_expenses = sum(t['amount'] for t in current_trans if t['type'] == 'despesa')
+        
+        final_balance = previous_balance + month_income - month_expenses
+        
+        return DashboardSummary(
+            previous_balance=previous_balance,
+            month_income=month_income,
+            month_expenses=month_expenses,
+            final_balance=final_balance
+        )
 
-class FamilyChallenge(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    description: str
-    target_amount: float
-    current_amount: float = 0.0
-    reward: str  # what the family gets when completing
-    deadline: Optional[datetime] = None
-    category_id: Optional[str] = None  # optional category to track
-    is_active: bool = True
-    is_completed: bool = False
-    completed_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+@api_router.get("/dashboard/emergency-reserve")
+async def get_emergency_reserve(user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        # Get emergency reserve category
+        cursor = await db.execute(
+            "SELECT id FROM categories WHERE user_id = ? AND name = 'Reserva de Emergência'",
+            (user_id,)
+        )
+        cat_row = await cursor.fetchone()
+        
+        if not cat_row:
+            return {"total": 0, "message": "Configure a categoria Reserva de Emergência"}
+        
+        category_id = cat_row['id']
+        
+        # Get transactions for this category
+        cursor = await db.execute(
+            "SELECT amount, type, is_reserve_deposit, is_reserve_withdrawal FROM transactions WHERE user_id = ? AND (category_id = ? OR is_reserve_deposit = 1 OR is_reserve_withdrawal = 1)",
+            (user_id, category_id)
+        )
+        transactions = await cursor.fetchall()
+        
+        total = 0
+        for t in transactions:
+            if t['is_reserve_deposit'] or (t['category_id'] == category_id and t['type'] == 'receita'):
+                total += t['amount']
+            elif t['is_reserve_withdrawal']:
+                total -= t['amount']
+        
+        # Get average monthly expenses
+        cursor = await db.execute(
+            "SELECT AVG(amount) as avg FROM transactions WHERE user_id = ? AND type = 'despesa'",
+            (user_id,)
+        )
+        avg_row = await cursor.fetchone()
+        avg_expenses = avg_row['avg'] or 0
+        
+        months_covered = total / avg_expenses if avg_expenses > 0 else 0
+        
+        if months_covered >= 6:
+            message = "Excelente! Mais de 6 meses de despesas guardadas"
+        elif months_covered >= 3:
+            message = f"Bom progresso! {months_covered:.1f} meses de despesas guardadas"
+        else:
+            message = f"Continue construindo sua reserva ({months_covered:.1f} meses)"
+        
+        return {"total": total, "months_covered": months_covered, "message": message}
 
-class FamilyChallengeCreate(BaseModel):
-    name: str
-    description: str
-    target_amount: float
-    reward: str
-    deadline: Optional[datetime] = None
-    category_id: Optional[str] = None
+@api_router.get("/dashboard/category-chart")
+async def get_category_chart(month: int, year: int, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM transactions WHERE user_id = ? AND type = 'despesa'", (user_id,))
+        transactions = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        # Filter by month/year
+        transactions = [
+            t for t in transactions 
+            if datetime.fromisoformat(t['date']).month == month 
+            and datetime.fromisoformat(t['date']).year == year
+        ]
+        
+        # Get categories
+        cursor = await db.execute("SELECT id, name FROM categories WHERE user_id = ?", (user_id,))
+        categories = {r['id']: r['name'] for r in await cursor.fetchall()}
+        
+        # Aggregate by category
+        category_totals = {}
+        for t in transactions:
+            cat_name = categories.get(t['category_id'], 'Sem categoria')
+            category_totals[cat_name] = category_totals.get(cat_name, 0) + t['amount']
+        
+        total = sum(category_totals.values())
+        
+        result = [
+            CategoryChart(
+                category=cat, 
+                amount=amount, 
+                percentage=round((amount/total*100) if total > 0 else 0, 2)
+            )
+            for cat, amount in category_totals.items()
+        ]
+        
+        return sorted(result, key=lambda x: x.amount, reverse=True)
 
-class HealthScore(BaseModel):
-    total_score: int  # 0-100
-    reserve_score: int  # 0-30
-    expense_ratio_score: int  # 0-30
-    consistency_score: int  # 0-20
-    goals_score: int  # 0-20
-    level: str  # "Crítico", "Atenção", "Bom", "Excelente"
-    tips: List[str]
+@api_router.get("/dashboard/monthly-comparison")
+async def get_monthly_comparison(year: int, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM transactions WHERE user_id = ?", (user_id,))
+        transactions = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        # Parse dates
+        for t in transactions:
+            t['date_obj'] = datetime.fromisoformat(t['date'])
+        
+        # Filter by year
+        year_trans = [t for t in transactions if t['date_obj'].year == year]
+        
+        month_names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        result = []
+        
+        for month_num in range(1, 13):
+            month_trans = [t for t in year_trans if t['date_obj'].month == month_num]
+            income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
+            expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
+            result.append(MonthlyComparison(month=month_names[month_num-1], income=income, expenses=expenses))
+        
+        return result
 
-# ==================== END GAMIFICATION MODELS ====================
+# ==================== GOALS ====================
 
-class ProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    profile_photo: Optional[str] = None
-    preferences: Optional[dict] = None
+@api_router.get("/goals")
+async def get_goals(user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM goals WHERE user_id = ?", (user_id,))
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
 
-class PasswordChange(BaseModel):
-    current_password: str
-    new_password: str
+@api_router.post("/goals")
+async def create_goal(goal: GoalCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        goal_obj = Goal(**goal.model_dump())
+        await db.execute('''
+            INSERT INTO goals (id, user_id, name, description, target_amount, current_amount, 
+                deadline, image_url, monthly_contribution, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (goal_obj.id, user_id, goal_obj.name, goal_obj.description, goal_obj.target_amount,
+              goal_obj.current_amount, goal_obj.deadline.isoformat() if goal_obj.deadline else None,
+              goal_obj.image_url, goal_obj.monthly_contribution, goal_obj.created_at.isoformat()))
+        await db.commit()
+        return goal_obj
+
+@api_router.put("/goals/{goal_id}")
+async def update_goal(goal_id: str, goal: GoalCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        await db.execute('''
+            UPDATE goals SET name = ?, description = ?, target_amount = ?, 
+                deadline = ?, image_url = ?, monthly_contribution = ?
+            WHERE id = ? AND user_id = ?
+        ''', (goal.name, goal.description, goal.target_amount,
+              goal.deadline.isoformat() if goal.deadline else None,
+              goal.image_url, goal.monthly_contribution, goal_id, user_id))
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM goals WHERE id = ?", (goal_id,))
+        row = await cursor.fetchone()
+        return row_to_dict(row)
+
+@api_router.delete("/goals/{goal_id}")
+async def delete_goal(goal_id: str, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        await db.execute("DELETE FROM goals WHERE id = ? AND user_id = ?", (goal_id, user_id))
+        await db.commit()
+        return {"message": "Goal deleted"}
+
+@api_router.post("/goals/{goal_id}/contribute")
+async def contribute_to_goal(goal_id: str, contribution: GoalContribution, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        await db.execute(
+            "UPDATE goals SET current_amount = current_amount + ? WHERE id = ? AND user_id = ?",
+            (contribution.amount, goal_id, user_id)
+        )
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM goals WHERE id = ?", (goal_id,))
+        row = await cursor.fetchone()
+        return row_to_dict(row)
+
+# ==================== CATEGORIZATION RULES ====================
+
+@api_router.get("/categorization-rules")
+async def get_categorization_rules(user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute(
+            "SELECT * FROM categorization_rules WHERE user_id = ? ORDER BY priority DESC",
+            (user_id,)
+        )
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
+
+@api_router.post("/categorization-rules")
+async def create_categorization_rule(rule: CategorizationRuleCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        rule_id = str(uuid.uuid4())
+        await db.execute('''
+            INSERT INTO categorization_rules (id, user_id, keyword, category_id, match_type, is_active, priority, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (rule_id, user_id, rule.keyword, rule.category_id, rule.match_type,
+              int(rule.is_active), rule.priority, datetime.now(timezone.utc).isoformat()))
+        await db.commit()
+        return {"id": rule_id, **rule.model_dump()}
+
+@api_router.put("/categorization-rules/{rule_id}")
+async def update_categorization_rule(rule_id: str, rule: CategorizationRuleCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        await db.execute('''
+            UPDATE categorization_rules SET keyword = ?, category_id = ?, match_type = ?, 
+                is_active = ?, priority = ?
+            WHERE id = ? AND user_id = ?
+        ''', (rule.keyword, rule.category_id, rule.match_type, int(rule.is_active),
+              rule.priority, rule_id, user_id))
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM categorization_rules WHERE id = ?", (rule_id,))
+        row = await cursor.fetchone()
+        return row_to_dict(row)
+
+@api_router.delete("/categorization-rules/{rule_id}")
+async def delete_categorization_rule(rule_id: str, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        await db.execute("DELETE FROM categorization_rules WHERE id = ? AND user_id = ?", (rule_id, user_id))
+        await db.commit()
+        return {"message": "Rule deleted"}
+
+# ==================== PROFILE ====================
 
 @api_router.get("/profile")
 async def get_profile(user_id: str = Depends(verify_token)):
-    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user_doc
+    async with get_db_context() as db:
+        cursor = await db.execute(
+            "SELECT id, email, name, is_admin, is_approved, profile_photo, preferences, created_at FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_dict = row_to_dict(row)
+        if user_dict.get('preferences'):
+            user_dict['preferences'] = json.loads(user_dict['preferences'])
+        return user_dict
 
 @api_router.put("/profile")
 async def update_profile(profile: ProfileUpdate, user_id: str = Depends(verify_token)):
-    update_data = {}
-    if profile.name is not None:
-        update_data['name'] = profile.name
-    if profile.profile_photo is not None:
-        update_data['profile_photo'] = profile.profile_photo
-    if profile.preferences is not None:
-        update_data['preferences'] = profile.preferences
-    
-    if update_data:
-        result = await db.users.update_one(
-            {"id": user_id},
-            {"$set": update_data}
-        )
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="User not found")
-    
-    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
-    return updated_user
+    async with get_db_context() as db:
+        updates = []
+        params = []
+        
+        if profile.name:
+            updates.append("name = ?")
+            params.append(profile.name)
+        if profile.profile_photo:
+            updates.append("profile_photo = ?")
+            params.append(profile.profile_photo)
+        if profile.preferences:
+            updates.append("preferences = ?")
+            params.append(json.dumps(profile.preferences))
+        
+        if updates:
+            params.append(user_id)
+            await db.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+            await db.commit()
+        
+        return {"message": "Profile updated"}
 
 @api_router.post("/profile/change-password")
 async def change_password(data: PasswordChange, user_id: str = Depends(verify_token)):
-    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Verify current password
-    if not bcrypt.checkpw(data.current_password.encode('utf-8'), user_doc['password'].encode('utf-8')):
-        raise HTTPException(status_code=400, detail="Senha atual incorreta")
-    
-    # Hash new password
-    hashed_password = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt())
-    
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"password": hashed_password.decode('utf-8')}}
-    )
-    
-    return {"message": "Senha alterada com sucesso"}
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT password FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        
+        if not verify_password(data.current_password, row['password']):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        await db.execute("UPDATE users SET password = ? WHERE id = ?",
+                        (hash_password(data.new_password), user_id))
+        await db.commit()
+        return {"message": "Password changed successfully"}
 
-@api_router.delete("/transactions/delete-all")
-async def delete_all_transactions(user_id: str = Depends(verify_token)):
-    result = await db.transactions.delete_many({"user_id": user_id})
-    return {"message": f"Todas as {result.deleted_count} transações foram excluídas com sucesso", "count": result.deleted_count}
+# ==================== GAMIFICATION ====================
 
-# ==================== GAMIFICATION ENDPOINTS ====================
-
-# Badge definitions - these are the available badges
 BADGE_DEFINITIONS = [
     {"name": "Mês sem Juros", "description": "Completou um mês sem pagar juros", "icon": "🎉", "criteria": "no_interest_month"},
     {"name": "Poupador Iniciante", "description": "Fez o primeiro depósito na reserva de emergência", "icon": "🌱", "criteria": "first_reserve_deposit"},
@@ -953,297 +1131,259 @@ BADGE_DEFINITIONS = [
 
 @api_router.get("/gamification/badges")
 async def get_user_badges(user_id: str = Depends(verify_token)):
-    """Get all badges and their unlock status for the user"""
-    user_badges = await db.badges.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    unlocked_badges = {b['criteria']: b for b in user_badges}
-    
-    result = []
-    for badge_def in BADGE_DEFINITIONS:
-        unlocked = unlocked_badges.get(badge_def['criteria'])
-        result.append({
-            **badge_def,
-            "unlocked": unlocked is not None,
-            "unlocked_at": unlocked.get('unlocked_at') if unlocked else None
-        })
-    
-    return result
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT criteria, unlocked_at FROM badges WHERE user_id = ?", (user_id,))
+        unlocked = {r['criteria']: r['unlocked_at'] for r in await cursor.fetchall()}
+        
+        return [
+            {
+                **badge,
+                "unlocked": badge['criteria'] in unlocked,
+                "unlocked_at": unlocked.get(badge['criteria'])
+            }
+            for badge in BADGE_DEFINITIONS
+        ]
 
 @api_router.post("/gamification/check-badges")
 async def check_and_unlock_badges(user_id: str = Depends(verify_token)):
-    """Check and automatically unlock badges based on user activity"""
-    unlocked = []
-    
-    # Get user data
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    members = await db.family_members.find({"user_id": user_id}, {"_id": 0}).to_list(100)
-    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    
-    reserve_category = next((c for c in categories if c['name'] == 'Reserva de Emergência'), None)
-    reserve_category_id = reserve_category['id'] if reserve_category else None
-    
-    for trans in transactions:
-        if isinstance(trans.get('date'), str):
-            trans['date'] = datetime.fromisoformat(trans['date'])
-    
-    current_month = datetime.now(timezone.utc).month
-    current_year = datetime.now(timezone.utc).year
-    
-    # Check: First reserve deposit
-    if reserve_category_id:
-        reserve_transactions = [t for t in transactions if t.get('category_id') == reserve_category_id or t.get('is_reserve_deposit')]
-        if reserve_transactions:
-            existing = await db.badges.find_one({"user_id": user_id, "criteria": "first_reserve_deposit"})
-            if not existing:
-                badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "first_reserve_deposit", "unlocked_at": datetime.now(timezone.utc).isoformat()}
-                await db.badges.insert_one(badge)
-                unlocked.append({"name": "Poupador Iniciante", "icon": "🌱"})
-    
-    # Check: Goal completed
-    completed_goals = [g for g in goals if g.get('current_amount', 0) >= g.get('target_amount', float('inf'))]
-    if completed_goals:
-        existing = await db.badges.find_one({"user_id": user_id, "criteria": "goal_completed"})
-        if not existing:
-            badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "goal_completed", "unlocked_at": datetime.now(timezone.utc).isoformat()}
-            await db.badges.insert_one(badge)
-            unlocked.append({"name": "Meta de Reserva Batida", "icon": "🏆"})
-    
-    # Check: High savings rate (>30%)
-    current_month_trans = [t for t in transactions if t['date'].month == current_month and t['date'].year == current_year]
-    income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
-    expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
-    if income > 0:
-        savings_rate = ((income - expenses) / income) * 100
-        if savings_rate >= 30:
-            existing = await db.badges.find_one({"user_id": user_id, "criteria": "high_savings_rate"})
-            if not existing:
-                badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "high_savings_rate", "unlocked_at": datetime.now(timezone.utc).isoformat()}
-                await db.badges.insert_one(badge)
+    async with get_db_context() as db:
+        unlocked = []
+        
+        # Get user data
+        cursor = await db.execute("SELECT * FROM transactions WHERE user_id = ?", (user_id,))
+        transactions = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        cursor = await db.execute("SELECT * FROM goals WHERE user_id = ?", (user_id,))
+        goals = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        cursor = await db.execute("SELECT id FROM categories WHERE user_id = ? AND name = 'Reserva de Emergência'", (user_id,))
+        reserve_cat = await cursor.fetchone()
+        reserve_category_id = reserve_cat['id'] if reserve_cat else None
+        
+        # Parse dates
+        for t in transactions:
+            t['date_obj'] = datetime.fromisoformat(t['date'])
+        
+        current_month = datetime.now(timezone.utc).month
+        current_year = datetime.now(timezone.utc).year
+        
+        # Check: First reserve deposit
+        if reserve_category_id:
+            reserve_trans = [t for t in transactions if t.get('category_id') == reserve_category_id or t.get('is_reserve_deposit')]
+            if reserve_trans:
+                cursor = await db.execute("SELECT id FROM badges WHERE user_id = ? AND criteria = 'first_reserve_deposit'", (user_id,))
+                if not await cursor.fetchone():
+                    badge_id = str(uuid.uuid4())
+                    await db.execute("INSERT INTO badges (id, user_id, criteria, unlocked_at) VALUES (?, ?, ?, ?)",
+                                    (badge_id, user_id, 'first_reserve_deposit', datetime.now(timezone.utc).isoformat()))
+                    unlocked.append({"name": "Poupador Iniciante", "icon": "🌱"})
+        
+        # Check: Goal completed
+        completed_goals = [g for g in goals if g.get('current_amount', 0) >= g.get('target_amount', float('inf'))]
+        if completed_goals:
+            cursor = await db.execute("SELECT id FROM badges WHERE user_id = ? AND criteria = 'goal_completed'", (user_id,))
+            if not await cursor.fetchone():
+                badge_id = str(uuid.uuid4())
+                await db.execute("INSERT INTO badges (id, user_id, criteria, unlocked_at) VALUES (?, ?, ?, ?)",
+                                (badge_id, user_id, 'goal_completed', datetime.now(timezone.utc).isoformat()))
+                unlocked.append({"name": "Meta de Reserva Batida", "icon": "🏆"})
+        
+        # Check: High savings rate (>30%)
+        current_trans = [t for t in transactions if t['date_obj'].month == current_month and t['date_obj'].year == current_year]
+        income = sum(t['amount'] for t in current_trans if t['type'] == 'receita')
+        expenses = sum(t['amount'] for t in current_trans if t['type'] == 'despesa')
+        
+        if income > 0 and ((income - expenses) / income) >= 0.3:
+            cursor = await db.execute("SELECT id FROM badges WHERE user_id = ? AND criteria = 'high_savings_rate'", (user_id,))
+            if not await cursor.fetchone():
+                badge_id = str(uuid.uuid4())
+                await db.execute("INSERT INTO badges (id, user_id, criteria, unlocked_at) VALUES (?, ?, ?, ?)",
+                                (badge_id, user_id, 'high_savings_rate', datetime.now(timezone.utc).isoformat()))
                 unlocked.append({"name": "Economizador Master", "icon": "💎"})
-    
-    # Check: All transactions categorized
-    uncategorized = [t for t in current_month_trans if not t.get('category_id')]
-    if current_month_trans and not uncategorized:
-        existing = await db.badges.find_one({"user_id": user_id, "criteria": "all_categorized"})
-        if not existing:
-            badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "all_categorized", "unlocked_at": datetime.now(timezone.utc).isoformat()}
-            await db.badges.insert_one(badge)
-            unlocked.append({"name": "Organizador Financeiro", "icon": "📊"})
-    
-    # Check: Solid reserve (6+ months expenses)
-    avg_monthly_expenses = expenses if expenses > 0 else 1
-    reserve_total = sum(t['amount'] for t in transactions if t.get('is_reserve_deposit') or (reserve_category_id and t.get('category_id') == reserve_category_id and t['type'] == 'receita'))
-    if reserve_total >= avg_monthly_expenses * 6:
-        existing = await db.badges.find_one({"user_id": user_id, "criteria": "solid_reserve"})
-        if not existing:
-            badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "solid_reserve", "unlocked_at": datetime.now(timezone.utc).isoformat()}
-            await db.badges.insert_one(badge)
-            unlocked.append({"name": "Reserva Sólida", "icon": "🛡️"})
-    
-    # Check: All members contributed
-    if members:
-        member_ids = {m['id'] for m in members}
-        contributing_members = {t['member_id'] for t in current_month_trans if t.get('member_id')}
-        if member_ids and member_ids == contributing_members:
-            existing = await db.badges.find_one({"user_id": user_id, "criteria": "all_members_contributed"})
-            if not existing:
-                badge = {"id": str(uuid.uuid4()), "user_id": user_id, "criteria": "all_members_contributed", "unlocked_at": datetime.now(timezone.utc).isoformat()}
-                await db.badges.insert_one(badge)
-                unlocked.append({"name": "Família Unida", "icon": "👨‍👩‍👧‍👦"})
-    
-    return {"unlocked": unlocked, "count": len(unlocked)}
+        
+        await db.commit()
+        return {"unlocked": unlocked, "count": len(unlocked)}
 
-# Family Challenges
-@api_router.post("/gamification/challenges")
-async def create_challenge(challenge: FamilyChallengeCreate, user_id: str = Depends(verify_token)):
-    challenge_obj = FamilyChallenge(**challenge.model_dump())
-    doc = challenge_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    if doc.get('deadline'):
-        doc['deadline'] = doc['deadline'].isoformat()
-    doc['user_id'] = user_id
-    await db.challenges.insert_one(doc)
-    return challenge_obj
+@api_router.get("/gamification/health-score", response_model=HealthScore)
+async def get_health_score(user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM transactions WHERE user_id = ?", (user_id,))
+        transactions = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        cursor = await db.execute("SELECT * FROM goals WHERE user_id = ?", (user_id,))
+        goals = [row_to_dict(r) for r in await cursor.fetchall()]
+        
+        cursor = await db.execute("SELECT id FROM categories WHERE user_id = ? AND name = 'Reserva de Emergência'", (user_id,))
+        reserve_cat = await cursor.fetchone()
+        reserve_category_id = reserve_cat['id'] if reserve_cat else None
+        
+        for t in transactions:
+            t['date_obj'] = datetime.fromisoformat(t['date'])
+        
+        current_month = datetime.now(timezone.utc).month
+        current_year = datetime.now(timezone.utc).year
+        
+        # Current month data
+        current_trans = [t for t in transactions if t['date_obj'].month == current_month and t['date_obj'].year == current_year]
+        month_income = sum(t['amount'] for t in current_trans if t['type'] == 'receita')
+        month_expenses = sum(t['amount'] for t in current_trans if t['type'] == 'despesa')
+        
+        # Reserve calculation
+        reserve_total = 0
+        if reserve_category_id:
+            for t in transactions:
+                if t.get('is_reserve_deposit') or (t.get('category_id') == reserve_category_id and t['type'] == 'receita'):
+                    reserve_total += t['amount']
+                elif t.get('is_reserve_withdrawal'):
+                    reserve_total -= t['amount']
+        
+        tips = []
+        
+        # 1. Reserve Score (0-30)
+        months_covered = reserve_total / month_expenses if month_expenses > 0 else 0
+        if months_covered >= 6:
+            reserve_score = 30
+        elif months_covered >= 3:
+            reserve_score = 20
+        elif months_covered >= 1:
+            reserve_score = 10
+        else:
+            reserve_score = 0
+            tips.append("💡 Construa uma reserva de emergência de 3-6 meses de despesas")
+        
+        # 2. Expense Ratio Score (0-30)
+        if month_income > 0:
+            expense_ratio = month_expenses / month_income
+            if expense_ratio <= 0.5:
+                expense_ratio_score = 30
+            elif expense_ratio <= 0.7:
+                expense_ratio_score = 20
+            elif expense_ratio <= 0.9:
+                expense_ratio_score = 10
+            else:
+                expense_ratio_score = 0
+                tips.append("💡 Reduza despesas para menos de 70% da renda")
+        else:
+            expense_ratio_score = 0
+            tips.append("💡 Registre suas receitas para análise completa")
+        
+        # 3. Consistency Score (0-20)
+        months_with_savings = 0
+        for i in range(3):
+            check_month = current_month - i if current_month - i > 0 else 12 + (current_month - i)
+            check_year = current_year if current_month - i > 0 else current_year - 1
+            month_trans = [t for t in transactions if t['date_obj'].month == check_month and t['date_obj'].year == check_year]
+            m_income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
+            m_expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
+            if m_income > m_expenses:
+                months_with_savings += 1
+        
+        consistency_score = {3: 20, 2: 13, 1: 7}.get(months_with_savings, 0)
+        if months_with_savings == 0:
+            tips.append("💡 Tente economizar algo todo mês")
+        
+        # 4. Goals Score (0-20)
+        if goals:
+            total_progress = sum(min(g.get('current_amount', 0) / g.get('target_amount', 1), 1.0) for g in goals)
+            goals_score = int((total_progress / len(goals)) * 20)
+        else:
+            goals_score = 0
+            tips.append("💡 Defina metas financeiras para acompanhar progresso")
+        
+        total_score = reserve_score + expense_ratio_score + consistency_score + goals_score
+        
+        level = "Crítico" if total_score < 40 else "Atenção" if total_score < 60 else "Bom" if total_score < 80 else "Excelente"
+        
+        return HealthScore(
+            total_score=total_score,
+            reserve_score=reserve_score,
+            expense_ratio_score=expense_ratio_score,
+            consistency_score=consistency_score,
+            goals_score=goals_score,
+            level=level,
+            tips=tips[:3]
+        )
+
+# ==================== CHALLENGES ====================
 
 @api_router.get("/gamification/challenges")
 async def get_challenges(user_id: str = Depends(verify_token)):
-    challenges = await db.challenges.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    for challenge in challenges:
-        if isinstance(challenge.get('created_at'), str):
-            challenge['created_at'] = datetime.fromisoformat(challenge['created_at'])
-        if challenge.get('deadline') and isinstance(challenge['deadline'], str):
-            challenge['deadline'] = datetime.fromisoformat(challenge['deadline'])
-    return challenges
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM challenges WHERE user_id = ?", (user_id,))
+        rows = await cursor.fetchall()
+        return [row_to_dict(r) for r in rows]
 
-@api_router.put("/gamification/challenges/{challenge_id}")
-async def update_challenge(challenge_id: str, challenge: FamilyChallengeCreate, user_id: str = Depends(verify_token)):
-    update_data = challenge.model_dump()
-    if update_data.get('deadline'):
-        update_data['deadline'] = update_data['deadline'].isoformat()
-    result = await db.challenges.update_one({"id": challenge_id, "user_id": user_id}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-    updated = await db.challenges.find_one({"id": challenge_id}, {"_id": 0})
-    return updated
+@api_router.post("/gamification/challenges")
+async def create_challenge(challenge: FamilyChallengeCreate, user_id: str = Depends(verify_token)):
+    async with get_db_context() as db:
+        challenge_id = str(uuid.uuid4())
+        await db.execute('''
+            INSERT INTO challenges (id, user_id, name, description, target_amount, current_amount, 
+                reward, deadline, category_id, is_active, is_completed, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 1, 0, ?)
+        ''', (challenge_id, user_id, challenge.name, challenge.description, challenge.target_amount,
+              challenge.reward, challenge.deadline.isoformat() if challenge.deadline else None,
+              challenge.category_id, datetime.now(timezone.utc).isoformat()))
+        await db.commit()
+        return {"id": challenge_id, **challenge.model_dump()}
 
 @api_router.post("/gamification/challenges/{challenge_id}/progress")
 async def update_challenge_progress(challenge_id: str, amount: float, user_id: str = Depends(verify_token)):
-    """Update the current_amount of a challenge"""
-    challenge = await db.challenges.find_one({"id": challenge_id, "user_id": user_id}, {"_id": 0})
-    if not challenge:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-    
-    new_amount = challenge.get('current_amount', 0) + amount
-    is_completed = new_amount >= challenge.get('target_amount', float('inf'))
-    
-    update_data = {"current_amount": new_amount}
-    if is_completed and not challenge.get('is_completed'):
-        update_data['is_completed'] = True
-        update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.challenges.update_one({"id": challenge_id, "user_id": user_id}, {"$set": update_data})
-    
-    updated = await db.challenges.find_one({"id": challenge_id}, {"_id": 0})
-    return updated
+    async with get_db_context() as db:
+        cursor = await db.execute("SELECT * FROM challenges WHERE id = ? AND user_id = ?", (challenge_id, user_id))
+        challenge = await cursor.fetchone()
+        
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        
+        new_amount = challenge['current_amount'] + amount
+        is_completed = new_amount >= challenge['target_amount']
+        
+        if is_completed and not challenge['is_completed']:
+            await db.execute(
+                "UPDATE challenges SET current_amount = ?, is_completed = 1, completed_at = ? WHERE id = ?",
+                (new_amount, datetime.now(timezone.utc).isoformat(), challenge_id)
+            )
+        else:
+            await db.execute("UPDATE challenges SET current_amount = ? WHERE id = ?", (new_amount, challenge_id))
+        
+        await db.commit()
+        
+        cursor = await db.execute("SELECT * FROM challenges WHERE id = ?", (challenge_id,))
+        return row_to_dict(await cursor.fetchone())
 
 @api_router.delete("/gamification/challenges/{challenge_id}")
 async def delete_challenge(challenge_id: str, user_id: str = Depends(verify_token)):
-    result = await db.challenges.delete_one({"id": challenge_id, "user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-    return {"message": "Challenge deleted successfully"}
+    async with get_db_context() as db:
+        await db.execute("DELETE FROM challenges WHERE id = ? AND user_id = ?", (challenge_id, user_id))
+        await db.commit()
+        return {"message": "Challenge deleted"}
 
-# Health Score
-@api_router.get("/gamification/health-score", response_model=HealthScore)
-async def get_health_score(user_id: str = Depends(verify_token)):
-    """Calculate the financial health score (0-100) based on multiple criteria"""
-    
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
-    goals = await db.goals.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    categories = await db.categories.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
-    
-    for trans in transactions:
-        if isinstance(trans.get('date'), str):
-            trans['date'] = datetime.fromisoformat(trans['date'])
-    
-    current_month = datetime.now(timezone.utc).month
-    current_year = datetime.now(timezone.utc).year
-    
-    # Calculate current month's income and expenses
-    current_month_trans = [t for t in transactions if t['date'].month == current_month and t['date'].year == current_year]
-    month_income = sum(t['amount'] for t in current_month_trans if t['type'] == 'receita')
-    month_expenses = sum(t['amount'] for t in current_month_trans if t['type'] == 'despesa')
-    
-    # Calculate reserve
-    reserve_category = next((c for c in categories if c['name'] == 'Reserva de Emergência'), None)
-    reserve_category_id = reserve_category['id'] if reserve_category else None
-    reserve_total = 0
-    for trans in transactions:
-        if trans.get('is_reserve_deposit'):
-            reserve_total += trans['amount']
-        elif trans.get('is_reserve_withdrawal'):
-            reserve_total -= trans['amount']
-        elif reserve_category_id and trans.get('category_id') == reserve_category_id:
-            if trans.get('type') == 'receita':
-                reserve_total += trans['amount']
-            else:
-                reserve_total -= trans['amount']
-    
-    tips = []
-    
-    # 1. Reserve Score (0-30) - based on months of expenses covered
-    months_covered = reserve_total / month_expenses if month_expenses > 0 else 0
-    if months_covered >= 6:
-        reserve_score = 30
-    elif months_covered >= 3:
-        reserve_score = 20
-    elif months_covered >= 1:
-        reserve_score = 10
-    else:
-        reserve_score = 0
-        tips.append("💡 Construa uma reserva de emergência de pelo menos 3-6 meses de despesas")
-    
-    # 2. Expense Ratio Score (0-30) - expenses should be < 70% of income
-    if month_income > 0:
-        expense_ratio = month_expenses / month_income
-        if expense_ratio <= 0.5:
-            expense_ratio_score = 30
-        elif expense_ratio <= 0.7:
-            expense_ratio_score = 20
-        elif expense_ratio <= 0.9:
-            expense_ratio_score = 10
-        else:
-            expense_ratio_score = 0
-            tips.append("💡 Suas despesas estão muito altas. Tente reduzir para menos de 70% da renda")
-    else:
-        expense_ratio_score = 0
-        tips.append("💡 Registre suas receitas para uma análise mais precisa")
-    
-    # 3. Consistency Score (0-20) - based on savings pattern in last 3 months
-    consistency_score = 0
-    months_with_savings = 0
-    for i in range(3):
-        check_month = current_month - i if current_month - i > 0 else 12 + (current_month - i)
-        check_year = current_year if current_month - i > 0 else current_year - 1
-        month_trans = [t for t in transactions if t['date'].month == check_month and t['date'].year == check_year]
-        m_income = sum(t['amount'] for t in month_trans if t['type'] == 'receita')
-        m_expenses = sum(t['amount'] for t in month_trans if t['type'] == 'despesa')
-        if m_income > m_expenses:
-            months_with_savings += 1
-    
-    if months_with_savings == 3:
-        consistency_score = 20
-    elif months_with_savings == 2:
-        consistency_score = 13
-    elif months_with_savings == 1:
-        consistency_score = 7
-    else:
-        tips.append("💡 Tente economizar algo todo mês, mesmo que seja pouco")
-    
-    # 4. Goals Score (0-20) - based on progress towards goals
-    if goals:
-        total_progress = 0
-        for goal in goals:
-            progress = min(goal.get('current_amount', 0) / goal.get('target_amount', 1), 1.0)
-            total_progress += progress
-        avg_progress = total_progress / len(goals)
-        goals_score = int(avg_progress * 20)
-        if avg_progress < 0.5:
-            tips.append("💡 Continue investindo nas suas metas. Pequenos aportes fazem diferença!")
-    else:
-        goals_score = 0
-        tips.append("💡 Defina metas financeiras para acompanhar seu progresso")
-    
-    # Calculate total score
-    total_score = reserve_score + expense_ratio_score + consistency_score + goals_score
-    
-    # Determine level
-    if total_score >= 80:
-        level = "Excelente"
-    elif total_score >= 60:
-        level = "Bom"
-    elif total_score >= 40:
-        level = "Atenção"
-    else:
-        level = "Crítico"
-    
-    return HealthScore(
-        total_score=total_score,
-        reserve_score=reserve_score,
-        expense_ratio_score=expense_ratio_score,
-        consistency_score=consistency_score,
-        goals_score=goals_score,
-        level=level,
-        tips=tips[:3]  # Return top 3 tips
-    )
-
-# ==================== END GAMIFICATION ENDPOINTS ====================
+# ==================== INCLUDE ROUTER ====================
 
 app.include_router(api_router)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# ==================== STATIC FILES (Frontend) ====================
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Mount static files if directory exists (for production with built frontend)
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR / "static")), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve React frontend - catch-all route for SPA"""
+        # Skip API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        
+        # Try to serve the requested file
+        file_path = STATIC_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        
+        # Fall back to index.html for SPA routing
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        
+        raise HTTPException(status_code=404, detail="Frontend not found")
