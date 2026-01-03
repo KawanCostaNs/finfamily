@@ -4,15 +4,23 @@
 # ============================================
 
 # ==================== STAGE 1: Build Frontend ====================
-# MUDANÇA AQUI: Alterado de node:18-alpine para node:20-alpine
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Copiamos apenas o package.json (sem yarn.lock para evitar conflitos de versão)
+# Copia apenas o package.json
 COPY frontend/package.json ./
 
-# Install dependencies
+# --- CONFIGURAÇÕES PARA EVITAR TIMEOUT NO GOOGLE CLOUD ---
+# 1. Aumenta o tempo limite para 10 minutos
+RUN yarn config set network-timeout 600000
+# 2. Troca o registro padrão do Yarn para o do NPM (costuma ser mais estável)
+RUN yarn config set registry https://registry.npmjs.org/
+# 3. Desativa verificação estrita de SSL (ajuda em alguns casos de rede)
+RUN yarn config set strict-ssl false
+# ---------------------------------------------------------
+
+# Instala as dependências
 RUN yarn install
 
 # Copia o restante do código fonte
