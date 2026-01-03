@@ -13,8 +13,8 @@ class FinancialAppTester:
         self.tests_run = 0
         self.tests_passed = 0
         self.test_results = []
-        # Test credentials for existing user
-        self.test_email = "super@finamily.com"
+        # Test credentials for existing user (from review request)
+        self.test_email = "admin@finamily.com"
         self.test_password = "Admin@2025"
 
     def log_test(self, name, success, details=""):
