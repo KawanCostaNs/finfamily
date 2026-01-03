@@ -4,23 +4,24 @@
 # ============================================
 
 # ==================== STAGE 1: Build Frontend ====================
-FROM node:18-alpine AS frontend-builder
+# MUDANÇA AQUI: Alterado de node:18-alpine para node:20-alpine
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Copy package files
-COPY frontend/package.json frontend/yarn.lock ./
+# Copiamos apenas o package.json (sem yarn.lock para evitar conflitos de versão)
+COPY frontend/package.json ./
 
 # Install dependencies
-RUN yarn install --frozen-lockfile
+RUN yarn install
 
-# Copy source code
+# Copia o restante do código fonte
 COPY frontend/ .
 
-# Set API URL to relative path (same origin)
+# Define URL da API como relativa (mesma origem)
 ENV REACT_APP_BACKEND_URL=""
 
-# Build the React app
+# Build do React
 RUN yarn build
 
 # ==================== STAGE 2: Production ====================
@@ -47,6 +48,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 
 # Copy built frontend from stage 1
+# OBS: O caminho de origem é /app/frontend/build. 
+# Se seu projeto usar Vite, pode ser necessário mudar para /app/frontend/dist
 COPY --from=frontend-builder /app/frontend/build ./static
 
 # Create data directory for SQLite
